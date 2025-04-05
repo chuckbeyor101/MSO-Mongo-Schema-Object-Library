@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "MSO"
+version = "1.0.0"
+description = "MongoDB Schema Object - A ODM from Mongo DB JSON validation schema"
+readme = "README.md"
+authors = [
+    { name = "Charles Beyor"}
+]
+dependencies = [
+    "pymongo"
+]
+requires-python = ">=3.10"
+license = { text = "Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International" }
+keywords = ["ORM", "MongoDB", "ODM", "JSON", "Schema", "Validation", "Object", "Document", "Model"]

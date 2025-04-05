@@ -1,0 +1,7 @@
+*.venv
+*.log
+*.pyc
+*.pyo
+.idea
+*.csv
+.venv/*
