@@ -64,9 +64,9 @@ Tree View:
     ├── name: str
     ├── age: int
     ├── email: str
-    ├── gender: None
+    ├── gender: enum [Male, Female, Other]
     ├── addresses: List[addresses_item]
-    │   ├── type: None
+    │   ├── type: enum [Home, Business, Other]
     │   ├── street: str
     │   ├── city: str
     │   ├── state: str
