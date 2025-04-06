@@ -40,25 +40,24 @@ BSON_TYPE_MAP = {
 # ----------------------------------------------------------------------------------
 class ListFieldWrapper(list):
     """
-    A custom list wrapper that adds `.add()` to array fields,
-    allowing construction of embedded items using keyword arguments.
+    A custom list wrapper that adds `.add()` for schema-aware item creation
+    and prevents schema field overwrites from array item changes.
     """
-    def __init__(self, parent, field_name, item_class):
-        super().__init__()
+    def __init__(self, parent, field_name, item_class, initial=None):
+        super().__init__(initial or [])
         self._parent = parent
         self._field_name = field_name
         self._item_class = item_class
 
     def add(self, **kwargs):
-        """
-        Add a new nested object using keyword arguments.
-        Example: person.addresses.add(type="home", city="...")
-        """
         item = self._item_class(**kwargs)
         item._parent = self._parent
         item._parent_key = self._field_name
         self.append(item)
         return item
+
+    def to_serializable(self):
+        return [item.to_dict() if isinstance(item, MongoModel) else item for item in self]
 
 # ----------------------------------------------------------------------------------
 # MongoModel - A dynamic schema-driven base model for MongoDB documents
@@ -198,6 +197,10 @@ class MongoModel:
     # ----------------------------------------------------------------------------------
     def _mark_dirty(self):
         if hasattr(self, "_parent") and self._parent and hasattr(self, "_parent_key"):
+            # Only propagate for object fields (not items in an array)
+            if isinstance(self._parent._data.get(self._parent_key), list):
+                # Don't overwrite list fields
+                return
             self._parent._data[self._parent_key] = self
             self._parent._mark_dirty()
 
@@ -240,6 +243,8 @@ class MongoModel:
         for k, v in self._data.items():
             if isinstance(v, MongoModel):
                 result[k] = v.to_dict()
+            elif isinstance(v, ListFieldWrapper):
+                result[k] = v.to_serializable()
             elif isinstance(v, list):
                 result[k] = [i.to_dict() if isinstance(i, MongoModel) else i for i in v]
             else:
@@ -261,7 +266,8 @@ class MongoModel:
         if hasattr(self, '_id'):  # If document already has _id, it's an update
             self._get_collection().replace_one({"_id": self._id}, self.to_dict())
         else:
-            self._get_collection().insert_one(self.to_dict())
+            self_dict = self.to_dict()
+            self._get_collection().insert_one(self_dict)
 
         return self
 
