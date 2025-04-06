@@ -49,8 +49,14 @@ class ListFieldWrapper(list):
         self._field_name = field_name
         self._item_class = item_class
 
-    def add(self, **kwargs):
-        item = self._item_class(**kwargs)
+    def add(self, *args, **kwargs):
+        if args and isinstance(args[0], dict):
+            item = self._item_class(**args[0])
+        elif kwargs:
+            item = self._item_class(**kwargs)
+        else:
+            raise ValueError("add() requires either a dictionary or keyword arguments")
+
         item._parent = self._parent
         item._parent_key = self._field_name
         self.append(item)
