@@ -54,33 +54,38 @@ class ListFieldWrapper(list):
         Add one or more items to the list.
 
         Supports:
-          - .add(key1=value1, key2=value2)                        ← single item with keyword args
-          - .add({...})                                           ← single dict
-          - .add({...}, {...})                                    ← multiple dicts
-          - .add(*[{...}, {...}])                                 ← list of dicts
+            - .add(key1=value1, key2=value2)                    ← single item with kwargs
+            - .add(dict1)                                       ← one item as a dict
+            - .add(dict1, dict2)                                ← multiple items
+            - .add(*[dict1, dict2])                             ← list of dicts
+            - .add(instance)                                    ← instance of _item_class
+            - .add(instance1, dict2, instance3)                 ← mix of types
         """
         new_items = []
 
-        # Case: single item from keyword args
+        # Case: single item via kwargs
         if kwargs:
             item = self._item_class(**kwargs)
             new_items.append(item)
 
-        # Case: one or more dicts passed as positional args
+        # Case: one or more positional args
         for arg in args:
-            if isinstance(arg, dict):
-                item = self._item_class(**arg)
-                new_items.append(item)
+            if isinstance(arg, self._item_class):
+                new_items.append(arg)
+            elif isinstance(arg, dict):
+                new_items.append(self._item_class(**arg))
             elif isinstance(arg, list):
-                for inner in arg:
-                    if not isinstance(inner, dict):
-                        raise TypeError(f"Expected dict in list, got {type(inner)}")
-                    item = self._item_class(**inner)
-                    new_items.append(item)
+                for sub in arg:
+                    if isinstance(sub, self._item_class):
+                        new_items.append(sub)
+                    elif isinstance(sub, dict):
+                        new_items.append(self._item_class(**sub))
+                    else:
+                        raise TypeError(f"Unsupported type in list: {type(sub)}")
             else:
                 raise TypeError(f"Unsupported argument type: {type(arg)}")
 
-        # Set parent context and append
+        # Attach parent context and add to list
         for item in new_items:
             item._parent = self._parent
             item._parent_key = self._field_name
