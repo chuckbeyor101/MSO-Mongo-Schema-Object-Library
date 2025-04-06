@@ -110,6 +110,50 @@ person.delete()
 new_person = person.clone()
 ```
 
+# 🔍 Document Comparison
+MSO makes it easy to compare two MongoDB documents—either as model instances or dictionaries—using the powerful Model.diff() method. It supports:
+
+- Deep recursive comparison of nested objects and arrays
+- Detection of value and type changes
+- Flat or nested output formatting
+- Optional strict mode (type-sensitive)
+- Filtering for specific fields or changes
+
+### Basic Example
+```python
+from MSO.generator import get_model
+from pymongo import MongoClient
+
+client = MongoClient("mongodb://localhost:27017")
+db = client["mydb"]
+People = get_model(db, "people")
+
+# Create a valid model instance
+person1 = People(name="Alice", age=30, gender="Female")
+
+# Use a dictionary with type mismatch (age as string)
+person2 = {
+    "name": "Alice",
+    "age": "30",  # string instead of int
+    "gender": "Female"
+}
+
+diff = People.diff(person1, person2, strict=True)
+
+from pprint import pprint
+pprint(diff)
+```
+### Example Output
+```bash
+{
+  'age': {
+    'old': 30,
+    'new': '30',
+    'type_changed': True
+  }
+}
+```
+
 # Convert to and from dictionary
 ```python
 person_dict = person.to_dict()

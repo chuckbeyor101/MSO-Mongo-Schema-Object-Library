@@ -16,6 +16,7 @@ from datetime import datetime
 from bson import ObjectId
 from decimal import Decimal
 from typing import Any, List, Dict
+from copy import deepcopy
 
 # ----------------------------------------------------------------------------------
 # BSON Type Mapping (used to validate types from MongoDB schema)
@@ -417,7 +418,7 @@ class MongoModel:
             self._parent._mark_dirty()
 
     # ----------------------------------------------------------------------------------
-    # Deserialize nested objects/arrays based on schema
+    # Serialize / Deserialize nested objects/arrays based on schema
     # ----------------------------------------------------------------------------------
     def _deserialize_field(self, name, value):
         schema_props = self._schema.get("properties", {})
@@ -444,9 +445,39 @@ class MongoModel:
 
         return value
 
-    # ----------------------------------------------------------------------------------
-    # Serialize nested objects into dictionaries for MongoDB
-    # ----------------------------------------------------------------------------------
+    @classmethod
+    def from_dict(cls, data: dict):
+        """
+        Create an instance of this model from a dictionary of field values.
+
+        Args:
+            data (dict): A dictionary where keys are field names and values are field data.
+
+        Returns:
+            MongoModel: An initialized instance populated with data.
+        """
+        instance = cls()
+        for key, value in data.items():
+            setattr(instance, key, value)
+        return instance
+
+    @classmethod
+    def from_dict_unvalidated(cls, data: dict):
+        """
+        Unsafe fallback: creates an instance bypassing validation.
+        Only used internally for tools like diff().
+        """
+        instance = cls.__new__(cls)
+        instance._data = {}
+        instance._parent = None
+        instance._parent_key = None
+        instance._db = getattr(cls, "__db__", None)
+        instance._collection_name = getattr(cls, "__collection__", None)
+
+        for key, value in data.items():
+            instance._data[key] = value
+        return instance
+
     def to_dict(self):
         return self._serialize_data()
 
@@ -518,23 +549,109 @@ class MongoModel:
         self._run_hooks(self.__class__._post_delete_hooks)
 
     # ----------------------------------------------------------------------------------
-    # MongoDB Read/Query Operations (class methods)
+    # Comparisons
     # ----------------------------------------------------------------------------------
     @classmethod
-    def from_dict(cls, data: dict):
+    def diff(cls, a, b, *, deep=True, strict=False, include_unchanged=False, ignore_fields=None, flat=False):
         """
-        Create an instance of this model from a dictionary of field values.
+        Compare two MongoModel instances or dictionaries and return their differences.
 
         Args:
-            data (dict): A dictionary where keys are field names and values are field data.
+            a (MongoModel | dict): The first model or dictionary.
+            b (MongoModel | dict): The second model or dictionary.
+            deep (bool): Recursively compare nested fields. Default is True.
+            strict (bool): If True, compare values with strict type checks.
+            include_unchanged (bool): If True, include fields that are the same in the diff output.
+            ignore_fields (list): List of field names to skip during comparison.
+            flat (bool): If True, return diff as a flat dictionary using dot-notation paths.
 
         Returns:
-            MongoModel: An initialized instance populated with data.
+            dict: A dictionary describing the differences.
         """
-        instance = cls()
-        for key, value in data.items():
-            setattr(instance, key, value)
-        return instance
+        ignore_fields = set(ignore_fields or [])
+
+        # Coerce both objects into MongoModels using from_dict_unvalidated if needed
+        if not isinstance(a, cls):
+            a = cls.from_dict_unvalidated(a)
+        if not isinstance(b, cls):
+            b = cls.from_dict_unvalidated(b)
+
+        def _compare(x, y, path=""):
+            diffs = {}
+
+            all_keys = set(x._data.keys()) | set(y._data.keys())
+            for key in all_keys:
+                if key in ignore_fields:
+                    continue
+
+                val1 = x._data.get(key)
+                val2 = y._data.get(key)
+                full_path = f"{path}.{key}" if path else key
+
+                if isinstance(val1, MongoModel) and isinstance(val2, MongoModel) and deep:
+                    nested_diff = _compare(val1, val2, full_path)
+                    if nested_diff or include_unchanged:
+                        diffs.update(nested_diff)
+                    continue
+
+                if isinstance(val1, list) and isinstance(val2, list) and deep:
+                    max_len = max(len(val1), len(val2))
+                    for i in range(max_len):
+                        item_path = f"{full_path}[{i}]"
+                        try:
+                            item1 = val1[i]
+                        except IndexError:
+                            item1 = None
+                        try:
+                            item2 = val2[i]
+                        except IndexError:
+                            item2 = None
+
+                        if isinstance(item1, MongoModel) and isinstance(item2, MongoModel):
+                            nested_diff = _compare(item1, item2, item_path)
+                            if nested_diff or include_unchanged:
+                                diffs.update(nested_diff)
+                            continue
+
+                        if strict:
+                            changed = item1 != item2 or type(item1) != type(item2)
+                        else:
+                            changed = item1 != item2
+
+                        if changed or include_unchanged:
+                            diffs[item_path] = {
+                                "old": item1,
+                                "new": item2,
+                                "type_changed": type(item1).__name__ != type(item2).__name__
+                            }
+
+                    continue
+
+                # Compare scalars
+                if strict:
+                    changed = val1 != val2 or type(val1) != type(val2)
+                else:
+                    changed = val1 != val2
+
+                if changed or include_unchanged:
+                    diffs[full_path] = {
+                        "old": val1,
+                        "new": val2,
+                        "type_changed": type(val1).__name__ != type(val2).__name__
+                    }
+
+            return diffs
+
+        nested_diffs = _compare(a, b)
+
+        if not flat:
+            return nested_diffs
+
+        return nested_diffs  # Already flattened via dot-paths
+
+    # ----------------------------------------------------------------------------------
+    # MongoDB Read/Query Operations (class methods)
+    # ----------------------------------------------------------------------------------
 
     @classmethod
     def find_one(cls, filter: dict) -> Any:
