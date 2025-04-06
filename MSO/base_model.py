@@ -45,6 +45,8 @@ class ListFieldWrapper(list):
     - .remove_by(**criteria) to remove items matching criteria
     - .remove_all_by(**criteria) to remove all matching items
     - .remove_at(index) to remove an item at a specific index
+    - .move(old_index, new_index) to move an item within the list
+    - .swap(index1, index2) to swap two items in the list
     """
     def __init__(self, parent, field_name, item_class, initial=None):
         super().__init__(initial or [])
@@ -149,8 +151,47 @@ class ListFieldWrapper(list):
             raise IndexError(f"Index {index} out of range for field '{self._field_name}'")
         del self[index]
 
+    def move(self, old_index: int, new_index: int):
+        """
+        Move an item from old_index to new_index within the array.
+
+        Args:
+            old_index (int): The current index of the item to move.
+            new_index (int): The new index to move the item to.
+        """
+        if not (0 <= old_index < len(self)):
+            raise IndexError(f"old_index {old_index} out of range for list of length {len(self)}")
+        if not (0 <= new_index <= len(self)):
+            raise IndexError(f"new_index {new_index} out of range for list of length {len(self)}")
+
+        item = self.pop(old_index)
+        self.insert(new_index, item)
+
+        # Mark parent object as dirty so it knows to persist the change
+        if hasattr(self._parent, "_mark_dirty"):
+            self._parent._mark_dirty()
+
+    def swap(self, index1: int, index2: int):
+        """
+        Swap two items at the given indices in the list.
+
+        Args:
+            index1 (int): First index to swap.
+            index2 (int): Second index to swap.
+        """
+        if not (0 <= index1 < len(self)) or not (0 <= index2 < len(self)):
+            raise IndexError(f"swap indices out of range for list of length {len(self)}")
+
+        self[index1], self[index2] = self[index2], self[index1]
+
+        # Mark parent object as dirty to reflect changes
+        if hasattr(self._parent, "_mark_dirty"):
+            self._parent._mark_dirty()
+
     def to_serializable(self):
         return [item.to_dict() if isinstance(item, MongoModel) else item for item in self]
+
+
 
 # ----------------------------------------------------------------------------------
 # MongoModel - A dynamic schema-driven base model for MongoDB documents
