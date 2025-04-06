@@ -451,15 +451,6 @@ class MongoModel:
         self._db[self._collection_name].delete_one({"_id": self._data["_id"]})
 
     # ----------------------------------------------------------------------------------
-    # Introspection & Representation
-    # ----------------------------------------------------------------------------------
-    def __repr__(self):
-        return f"{self.__class__.__name__}({self._data})"
-
-    def __dir__(self):
-        return sorted(set(super().__dir__()) | set(self._data.keys()))
-
-    # ----------------------------------------------------------------------------------
     # MongoDB Read/Query Operations (class methods)
     # ----------------------------------------------------------------------------------
     @classmethod
@@ -699,6 +690,15 @@ class MongoModel:
         """
         return cls._get_collection().bulk_write(operations)
 
+    # ----------------------------------------------------------------------------------
+    # Introspection & Representation
+    # ----------------------------------------------------------------------------------
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self._data})"
+
+    def __dir__(self):
+        return sorted(set(super().__dir__()) | set(self._data.keys()))
+
     @classmethod
     def pretty_print_schema(cls):
         """
@@ -813,3 +813,32 @@ class MongoModel:
                     color=color,
                     _depth=_depth + 1
                 )
+
+    @classmethod
+    def fields(cls) -> dict:
+        """
+        Return a dictionary of field names and their BSON types (as Python types).
+        """
+        type_map = {
+            "string": "str", "int": "int", "bool": "bool", "double": "float",
+            "objectId": "ObjectId", "date": "datetime", "array": "List",
+            "object": "dict", "null": "None", "long": "int", "decimal": "Decimal"
+        }
+        props = cls._schema.get("properties", {})
+        return {
+            field: type_map.get(details.get("bsonType") or details.get("type"), "Any")
+            for field, details in props.items()
+        }
+
+    @classmethod
+    def enums(cls) -> dict:
+        """
+        Return a dictionary of enum fields and their allowed values.
+        """
+        props = cls._schema.get("properties", {})
+        return {
+            field: details["enum"]
+            for field, details in props.items()
+            if "enum" in details
+        }
+

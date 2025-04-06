@@ -33,3 +33,11 @@ People.print_nested_class_tree()
 # Pretty print schema
 print("\nSchema:")
 People.pretty_print_schema()
+
+# Print fields
+print("\nFields:")
+print(People.fields())
+
+# print all enums
+print("\nEnums:")
+print(People.enums())

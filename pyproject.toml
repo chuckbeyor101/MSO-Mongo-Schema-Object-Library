@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "MSO"
-version = "1.0.12"
+version = "1.0.13"
 description = "MongoDB Schema Object - A ODM from Mongo DB JSON validation schema"
 readme = "README.md"
 authors = [
