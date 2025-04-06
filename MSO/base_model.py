@@ -209,6 +209,19 @@ class MongoModel:
     _db = None  # Reference to the active MongoDB client DB object
     timestamps_enabled = True  # Toggle automatic management of created_at/last_modified timestamps
 
+
+    # ----------------------------------------------------------------------------------
+    # Lifecycle Hooks
+    # ----------------------------------------------------------------------------------
+    _pre_save_hooks = []
+    _post_save_hooks = []
+    _pre_delete_hooks = []
+    _post_delete_hooks = []
+
+    def _run_hooks(self, hook_list):
+        for hook in hook_list:
+            hook(self)
+
     # ----------------------------------------------------------------------------------
     # Validate a value against its schema-defined BSON type
     # ----------------------------------------------------------------------------------
@@ -302,7 +315,7 @@ class MongoModel:
             )
 
     # ----------------------------------------------------------------------------------
-    # Initialize the model with optional keyword data
+    # Initialize the model
     # ----------------------------------------------------------------------------------
     def __init__(self, **kwargs):
         self._data = {}  # Holds all dynamic field values
@@ -314,6 +327,14 @@ class MongoModel:
 
         for key, value in kwargs.items():
             setattr(self, key, value)
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        for attr_name in dir(cls):
+            attr = getattr(cls, attr_name)
+            if callable(attr) and hasattr(attr, "_hook_type"):
+                hook_type = attr._hook_type
+                getattr(cls, f"_{hook_type}_hooks").append(attr)
 
     # ----------------------------------------------------------------------------------
     # Dynamic getter - supports nested objects and auto-initializes empty arrays
@@ -446,6 +467,8 @@ class MongoModel:
     # MongoDB Write Operations
     # ----------------------------------------------------------------------------------
     def save(self):
+        self._run_hooks(self.__class__._pre_save_hooks)
+
         if self.timestamps_enabled:
             self.last_modified = datetime.utcnow()
             if not hasattr(self, 'created_at'):
@@ -458,6 +481,7 @@ class MongoModel:
             self_dict = self.to_dict()
             self._get_collection().insert_one(self_dict)
 
+        self._run_hooks(self.__class__._post_save_hooks)
         return self
 
     def refresh(self):
@@ -489,7 +513,9 @@ class MongoModel:
         return result
 
     def delete(self):
+        self._run_hooks(self.__class__._pre_delete_hooks)
         self._db[self._collection_name].delete_one({"_id": self._data["_id"]})
+        self._run_hooks(self.__class__._post_delete_hooks)
 
     # ----------------------------------------------------------------------------------
     # MongoDB Read/Query Operations (class methods)
@@ -882,4 +908,27 @@ class MongoModel:
             for field, details in props.items()
             if "enum" in details
         }
+
+# ----------------------------------------------------------------------------------
+# Lifecycle Hook Functions
+# ----------------------------------------------------------------------------------
+
+def pre_save(func):
+    func._hook_type = "pre_save"
+    return func
+
+
+def post_save(func):
+    func._hook_type = "post_save"
+    return func
+
+
+def pre_delete(func):
+    func._hook_type = "pre_delete"
+    return func
+
+
+def post_delete(func):
+    func._hook_type = "post_delete"
+    return func
 

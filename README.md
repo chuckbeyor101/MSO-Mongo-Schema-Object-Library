@@ -115,6 +115,32 @@ new_person = person.clone()
 person_dict = person.to_dict()
 ```
 
+# 🧩 Lifecycle Hooks
+You can use decorators like @pre_save, @post_save, @pre_delete, and @post_delete to hook into model lifecycle events. This is useful for setting defaults, cleaning up, triggering logs, or validating conditions.
+### Example: Automatically output a message when a document is saved
+```python
+from MSO.base_model import MongoModel, pre_save, post_save
+from pymongo import MongoClient
+
+client = MongoClient("mongodb://localhost:27017")
+db = client["mydb"]
+
+# Define the model hooks you would like to use
+class People(MongoModel):
+    @post_save # This method will be called after the document is saved
+    def confirm_save(self):
+        print(f"[+] Document saved: {self.name}")
+
+        
+People = get_model(db, "people")
+
+person = People(name="Jane Doe")
+person.save()
+
+# Output:
+# [+] Document saved: Jane Doe
+```
+
 # LICENSE & COPYWRIGHT WARNING
 MSO Copyright (c) 2025 by Charles L Beyor                                                                           
 is licensed under Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International.                          
