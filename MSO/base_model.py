@@ -194,7 +194,6 @@ class MongoModel:
 
         # Auto-instantiate nested object
         nested_class = getattr(self.__class__, name, None)
-
         if isinstance(nested_class, type) and issubclass(nested_class, MongoModel):
             instance = nested_class()
             instance._parent = self
@@ -216,6 +215,10 @@ class MongoModel:
                 else:
                     self._data[name] = []
                     return self._data[name]
+
+            # ✅ Return None for scalar fields if not set yet
+            self._data[name] = None
+            return None
 
         raise AttributeError(f"{self.__class__.__name__} has no attribute '{name}'")
 
