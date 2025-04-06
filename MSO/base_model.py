@@ -93,6 +93,59 @@ class ListFieldWrapper(list):
 
         return new_items[0] if len(new_items) == 1 else new_items
 
+    def remove_by(self, **criteria):
+        """
+        Remove the first matching item from the list based on given criteria.
+
+        Returns:
+            bool: True if an item was removed, False otherwise.
+        """
+        for item in self:
+            if isinstance(item, MongoModel):
+                if all(getattr(item, k, None) == v for k, v in criteria.items()):
+                    self.remove(item)
+                    return True
+            elif isinstance(item, dict):
+                if all(item.get(k) == v for k, v in criteria.items()):
+                    self.remove(item)
+                    return True
+        return False
+
+    def remove_all_by(self, **criteria):
+        """
+        Remove all items from the list that match the given criteria.
+
+        Returns:
+            int: Number of items removed.
+        """
+        to_remove = []
+        for item in self:
+            if isinstance(item, MongoModel):
+                if all(getattr(item, k, None) == v for k, v in criteria.items()):
+                    to_remove.append(item)
+            elif isinstance(item, dict):
+                if all(item.get(k) == v for k, v in criteria.items()):
+                    to_remove.append(item)
+
+        for item in to_remove:
+            self.remove(item)
+
+        return len(to_remove)
+
+    def remove_at(self, index: int):
+        """
+        Remove the item at the specified index from the list.
+
+        Args:
+            index (int): The position of the item to remove.
+
+        Raises:
+            IndexError: If the index is out of range.
+        """
+        if index < 0 or index >= len(self):
+            raise IndexError(f"Index {index} out of range for field '{self._field_name}'")
+        del self[index]
+
     def to_serializable(self):
         return [item.to_dict() if isinstance(item, MongoModel) else item for item in self]
 
