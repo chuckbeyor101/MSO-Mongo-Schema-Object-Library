@@ -37,9 +37,26 @@ print(new_person)
 # Modify and resave
 new_person.health.primary_physician.contact.phone = "123-456-7890"
 
-# add an address
+# add an address using add()
+new_person.addresses.add(type="work",street="789 Oak St",city="Panama",state="NJ",zip="14862")
+
+# Add a new condition to the person's medical history
+condition = new_person.health.medical_history.conditions.add(
+    name="Diabetes",
+    diagnosed="2022-01-01"
+)
+
+# Now it's safe to call `.add()` because `medications` will auto-init
+condition.medications.add(
+    name="Metformin",
+    dose="500mg",
+    frequency="2x daily"
+)
+
+# add an address using append
 address1 = People.addresses_item(type="home",street="456 Maple St",city="Panama",state="NJ",zip="14862")
 new_person.addresses.append(address1)
+
 
 print()
 print("Serialized before save:", new_person.to_dict())

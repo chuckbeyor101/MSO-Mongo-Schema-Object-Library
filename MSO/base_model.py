@@ -35,6 +35,30 @@ BSON_TYPE_MAP = {
     "object": dict,
     "array": list,
 }
+# ----------------------------------------------------------------------------------
+# ListFieldWrapper - A custom list wrapper for MongoDB array fields
+# ----------------------------------------------------------------------------------
+class ListFieldWrapper(list):
+    """
+    A custom list wrapper that adds `.add()` to array fields,
+    allowing construction of embedded items using keyword arguments.
+    """
+    def __init__(self, parent, field_name, item_class):
+        super().__init__()
+        self._parent = parent
+        self._field_name = field_name
+        self._item_class = item_class
+
+    def add(self, **kwargs):
+        """
+        Add a new nested object using keyword arguments.
+        Example: person.addresses.add(type="home", city="...")
+        """
+        item = self._item_class(**kwargs)
+        item._parent = self._parent
+        item._parent_key = self._field_name
+        self.append(item)
+        return item
 
 # ----------------------------------------------------------------------------------
 # MongoModel - A dynamic schema-driven base model for MongoDB documents
@@ -125,13 +149,20 @@ class MongoModel:
             self._data[name] = instance
             return instance
 
-        # Auto-initialize empty array for list fields
+        # Auto-initialize array fields with ListFieldWrapper if supported
         if name in self._schema.get("properties", {}):
             field_schema = self._schema["properties"][name]
             bson_type = field_schema.get("bsonType") or field_schema.get("type")
+
             if bson_type == "array":
-                self._data[name] = []
-                return self._data[name]
+                item_class = getattr(self.__class__, f"{name}_item", None)
+                if item_class:
+                    wrapper = ListFieldWrapper(self, name, item_class)
+                    self._data[name] = wrapper
+                    return wrapper
+                else:
+                    self._data[name] = []
+                    return self._data[name]
 
         raise AttributeError(f"{self.__class__.__name__} has no attribute '{name}'")
 
