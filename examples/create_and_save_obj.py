@@ -54,8 +54,11 @@ condition.medications.add(
 )
 
 # add an address using append
-address1 = People.addresses_item(type="home",street="456 Maple St",city="Panama",state="NJ",zip="14862")
+address1 = People.addresses_item(type="home",city="Panama",state="NJ",zip="14862")
 new_person.addresses.append(address1)
+
+# Modify medication by index reference
+new_person.health.medical_history.conditions[0].medications[0].dose = "1000mg"
 
 
 print()

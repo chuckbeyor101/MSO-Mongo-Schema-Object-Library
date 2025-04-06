@@ -15,6 +15,7 @@
 import os
 from pymongo import MongoClient
 from MSO.generator import get_model
+from pprint import pprint
 
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 MONGO_DB = os.getenv("MONGO_DB", "mydb")
@@ -25,5 +26,17 @@ db = client[MONGO_DB]
 # Get the model for the collection
 People = get_model(db, "people")
 
+person = People()
+person.name="Tony Pajama"
+person.addresses.add(type="Home", street="123 Main St", city="Panama", state="NJ", zip="14862")
+
 # This should fail because age is a string, not int.
-person = People(name="Tony Pajama", age="34")
+person.age="34"
+
+# This should fail because Rabbit is not an allowed enum value for this field
+person.gender = "Rabbit"
+
+# this should fail because address type cant be Vacation
+person.addresses[0].type = "Vacation"
+
+pass

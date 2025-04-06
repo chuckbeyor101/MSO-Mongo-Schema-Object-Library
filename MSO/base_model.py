@@ -79,35 +79,89 @@ class MongoModel:
     # Validate a value against its schema-defined BSON type
     # ----------------------------------------------------------------------------------
     def _validate_field_type(self, name, value):
+        """
+        Validates the given field's value using the class schema.
+        Handles type checking, enum constraints, and array validation.
+        """
         if name.startswith("_"):
             return
 
         schema_props = self._schema.get("properties", {})
         field_schema = schema_props.get(name, {})
         bson_type = field_schema.get("bsonType") or field_schema.get("type")
+        enum_values = field_schema.get("enum")
 
+        # ----------------------------
+        # ENUM VALIDATION (always check)
+        # ----------------------------
+        if enum_values is not None and value is not None:
+            if isinstance(value, list):
+                for i, item in enumerate(value):
+                    if item not in enum_values:
+                        raise ValueError(
+                            f"Invalid value '{item}' in array field '{name}[{i}]'; expected one of {enum_values}"
+                        )
+            else:
+                if value not in enum_values:
+                    raise ValueError(
+                        f"Invalid value '{value}' for field '{name}'; expected one of {enum_values}"
+                    )
+
+        # If no bsonType defined, skip type checking (but we already did enum checking)
         if not bson_type or value is None:
             return
 
-        # Handle multi-type fields (e.g., ["null", "object"])
+        # ----------------------------
+        # MULTI-TYPE SUPPORT
+        # ----------------------------
         if isinstance(bson_type, list):
             expected_types = [BSON_TYPE_MAP.get(t, object) for t in bson_type if t in BSON_TYPE_MAP]
         else:
             expected_types = [BSON_TYPE_MAP.get(bson_type, object)]
 
-        # Accept dynamically generated nested object types
+        # ----------------------------
+        # OBJECT VALIDATION
+        # ----------------------------
         if bson_type == "object":
             nested_class = getattr(self.__class__, f"__class_for__{name}", None)
             if nested_class and isinstance(value, nested_class):
                 return
 
-        # Accept arrays of valid nested objects
+        # ----------------------------
+        # ARRAY VALIDATION
+        # ----------------------------
         if bson_type == "array":
-            if isinstance(value, list):
-                item_class = getattr(self.__class__, f"{name}_item", None)
-                if item_class and all(isinstance(v, item_class) or not isinstance(v, dict) for v in value):
-                    return
+            if not isinstance(value, list):
+                raise TypeError(f"Expected list for field '{name}', got {type(value).__name__}")
 
+            item_schema = field_schema.get("items", {})
+            item_enum = item_schema.get("enum")
+            item_type = item_schema.get("bsonType") or item_schema.get("type")
+            item_class = getattr(self.__class__, f"{name}_item", None)
+
+            for i, item in enumerate(value):
+                # ENUM VALIDATION (scalars)
+                if item_enum and not isinstance(item, (dict, MongoModel)):
+                    if item not in item_enum:
+                        raise ValueError(
+                            f"Invalid value '{item}' in array field '{name}[{i}]'; expected one of {item_enum}"
+                        )
+
+                # OBJECT VALIDATION
+                if item_class and isinstance(item, item_class):
+                    continue
+
+                # SCALAR VALIDATION
+                expected_item_type = BSON_TYPE_MAP.get(item_type, object)
+                if not isinstance(item, expected_item_type):
+                    raise TypeError(
+                        f"Invalid item type in field '{name}[{i}]': expected {expected_item_type}, got {type(item).__name__}"
+                    )
+            return
+
+        # ----------------------------
+        # BASIC SCALAR TYPE CHECK
+        # ----------------------------
         if not any(isinstance(value, t) for t in expected_types):
             raise TypeError(
                 f"Invalid type for field '{name}': expected {expected_types}, got {type(value).__name__}"
@@ -259,8 +313,6 @@ class MongoModel:
             self.last_modified = datetime.utcnow()
             if not hasattr(self, 'created_at'):
                 self.created_at = self.last_modified
-
-
 
         # Call the actual save method (e.g., insert or update)
         if hasattr(self, '_id'):  # If document already has _id, it's an update
