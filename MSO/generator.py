@@ -99,7 +99,7 @@ def get_model(db, collection_name):
 
     # Attach any nested classes from model_class to FinalModel
     for attr, val in model_class.__dict__.items():
-        if isinstance(val, type) and issubclass(val, MongoModel):
+        if attr.startswith("__class_for__") or attr.endswith("_item"):
             setattr(FinalModel, attr, val)
 
     return FinalModel

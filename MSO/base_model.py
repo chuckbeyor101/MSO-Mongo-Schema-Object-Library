@@ -13,7 +13,25 @@
 # ######################################################################################################################
 
 from datetime import datetime
+from bson import ObjectId
+from decimal import Decimal
 from typing import Any, List, Dict
+
+BSON_TYPE_MAP = {
+    "string": str,
+    "int": int,
+    "bool": bool,
+    "double": float,
+    "date": datetime,
+    "objectId": ObjectId,
+    "binData": bytes,
+    "decimal": Decimal,
+    "long": int,
+    "timestamp": datetime,
+    "null": type(None),
+    "object": dict,
+    "array": list,
+}
 
 class MongoModel:
     _schema = {}
@@ -23,16 +41,47 @@ class MongoModel:
 
     timestamps_enabled = True  # Class-level option to enable or disable timestamps
 
+    def _validate_field_type(self, name, value):
+        if name.startswith("_"):
+            return
+
+        schema_props = self._schema.get("properties", {})
+        field_schema = schema_props.get(name, {})
+        bson_type = field_schema.get("bsonType") or field_schema.get("type")
+
+        if not bson_type or value is None:
+            return
+
+        # Handle multi-type fields (e.g., ["null", "object"])
+        if isinstance(bson_type, list):
+            expected_types = [BSON_TYPE_MAP.get(t, object) for t in bson_type if t in BSON_TYPE_MAP]
+        else:
+            expected_types = [BSON_TYPE_MAP.get(bson_type, object)]
+
+        # 👇 Special handling for dynamically generated object/array classes
+        if bson_type == "object":
+            nested_class = getattr(self.__class__, f"__class_for__{name}", None)
+            if nested_class and isinstance(value, nested_class):
+                return
+
+        if bson_type == "array":
+            if isinstance(value, list):
+                item_class = getattr(self.__class__, f"{name}_item", None)
+                if item_class and all(isinstance(v, item_class) or not isinstance(v, dict) for v in value):
+                    return
+
+        if not any(isinstance(value, t) for t in expected_types):
+            raise TypeError(
+                f"Invalid type for field '{name}': expected {expected_types}, got {type(value).__name__}"
+            )
+
     def __init__(self, **kwargs):
         self._data = {}
         self._parent = None
         self._parent_key = None
 
-        self._db = getattr(self.__class__, "__db__", None)  # ✅ fallback from FinalModel
+        self._db = getattr(self.__class__, "__db__", None)
         self._collection_name = getattr(self.__class__, "__collection__", None)
-
-        for key, value in kwargs.items():
-            setattr(self, key, value)
 
         for key, value in kwargs.items():
             setattr(self, key, value)
@@ -47,9 +96,8 @@ class MongoModel:
 
         nested_class = getattr(self.__class__, name, None)
 
-        # ✅ Critical check: only instantiate if it's a class AND not already in _data
         if isinstance(nested_class, type) and issubclass(nested_class, MongoModel):
-            instance = nested_class()  # ✅ Create instance, not return class
+            instance = nested_class()
             instance._parent = self
             instance._parent_key = name
             self._data[name] = instance
@@ -66,6 +114,7 @@ class MongoModel:
             return
 
         value = self._deserialize_field(name, value)
+        self._validate_field_type(name, value)
 
         if isinstance(value, MongoModel):
             value._parent = self
@@ -124,14 +173,12 @@ class MongoModel:
         return result
 
     def save(self):
-        """Save the document to the database, updating last_modified if enabled."""
         if self.timestamps_enabled:
-            # Automatically update the last_modified field to the current time
             self.last_modified = datetime.utcnow()
-
-            # If this is a new document, set created_at as well
             if not hasattr(self, 'created_at'):
                 self.created_at = self.last_modified
+
+
 
         # Call the actual save method (e.g., insert or update)
         if hasattr(self, '_id'):  # If document already has _id, it's an update
@@ -251,14 +298,6 @@ class MongoModel:
         return cls._get_collection().find_one_and_update(filter, update, upsert=upsert)
 
     @classmethod
-    def get_nested_classes(cls):
-        nested_classes = []
-        for key, value in cls.__dict__.items():
-            if isinstance(value, type) and issubclass(value, MongoModel):
-                nested_classes.append(key)
-        return nested_classes
-
-    @classmethod
     def validate_schema(cls, data: dict):
         for field, value in data.items():
             if field not in cls._schema['properties']:
@@ -271,3 +310,91 @@ class MongoModel:
     @classmethod
     def bulk_write(cls, operations: List[Dict]):
         return cls._get_collection().bulk_write(operations)
+
+    @classmethod
+    def pretty_print_schema(cls):
+        import pprint
+        pprint.pprint(cls._schema, indent=2)
+
+    @classmethod
+    def get_nested_classes(cls):
+        result = {}
+
+        for attr_name in dir(cls):
+            attr = getattr(cls, attr_name)
+            if isinstance(attr, type) and issubclass(attr, MongoModel):
+                result[attr_name] = attr
+                result.update(attr.get_nested_classes())
+
+        return result
+
+    @classmethod
+    def print_nested_class_tree(cls, prefix="", is_last=True, seen=None, *, show_scalars=True, max_depth=None,
+                                color=True, _depth=0):
+        if seen is None:
+            seen = set()
+
+        if cls in seen:
+            return
+        seen.add(cls)
+
+        if max_depth is not None and _depth > max_depth:
+            return
+
+        def c(text, color_code):
+            if not color:
+                return text
+            return f"\033[{color_code}m{text}\033[0m"
+
+        def type_label(bson_type):
+            type_map = {
+                "string": "str", "int": "int", "bool": "bool", "double": "float",
+                "objectId": "ObjectId", "date": "datetime", "array": "List",
+                "object": "Object", "null": "None", "long": "int"
+            }
+            if isinstance(bson_type, list):
+                return " | ".join([type_map.get(t, t) for t in bson_type])
+            return type_map.get(bson_type, bson_type)
+
+        connector = "└── " if is_last else "├── "
+
+        if _depth == 0:
+            print(prefix + "└── " + c(cls.__name__, "96"))
+
+        props = cls._schema.get("properties", {})
+        children = []
+
+        for field_name, field_schema in props.items():
+            bson_type = field_schema.get("bsonType") or field_schema.get("type")
+            typename = type_label(bson_type)
+            nested_class = None
+
+            if bson_type == "object":
+                nested_class = getattr(cls, f"__class_for__{field_name}", None)
+            elif bson_type == "array":
+                nested_class = getattr(cls, f"{field_name}_item", None)
+                if nested_class:
+                    typename = f"List[{field_name}_item]"
+                else:
+                    typename = "List"
+
+            if nested_class:
+                children.append((field_name, typename, nested_class))
+            elif show_scalars:
+                children.append((field_name, typename, None))  # scalar
+
+        for i, (field_name, typename, nested_cls) in enumerate(children):
+            last = (i == len(children) - 1)
+            child_prefix = prefix + ("    " if is_last else "│   ")
+            connector = "└── " if last else "├── "
+            print(f"{child_prefix}{connector}{c(field_name, '93')}: {c(typename, '92')}")
+            if nested_cls:
+                nested_cls.print_nested_class_tree(
+                    prefix=child_prefix,
+                    is_last=last,
+                    seen=seen,
+                    show_scalars=show_scalars,
+                    max_depth=max_depth,
+                    color=color,
+                    _depth=_depth + 1
+                )

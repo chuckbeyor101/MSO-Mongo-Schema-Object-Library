@@ -16,20 +16,14 @@ import os
 from pymongo import MongoClient
 from MSO.generator import get_model
 
-# Connect to MongoDB
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 MONGO_DB = os.getenv("MONGO_DB", "mydb")
 
 client = MongoClient(MONGO_URI)
 db = client[MONGO_DB]
 
-# Get the model for the "people" collection
+# Get the model for the collection
 People = get_model(db, "people")
 
-# Pretty tree view
-print("\nTree View:")
-People.print_nested_class_tree()
-
-# Pretty print schema
-print("\nSchema:")
-People.pretty_print_schema()
+# This should fail because age is a string, not int.
+person = People(name="Tony Pajama", age="34")
