@@ -50,17 +50,43 @@ class ListFieldWrapper(list):
         self._item_class = item_class
 
     def add(self, *args, **kwargs):
-        if args and isinstance(args[0], dict):
-            item = self._item_class(**args[0])
-        elif kwargs:
-            item = self._item_class(**kwargs)
-        else:
-            raise ValueError("add() requires either a dictionary or keyword arguments")
+        """
+        Add one or more items to the list.
 
-        item._parent = self._parent
-        item._parent_key = self._field_name
-        self.append(item)
-        return item
+        Supports:
+          - .add(key1=value1, key2=value2)                        ← single item with keyword args
+          - .add({...})                                           ← single dict
+          - .add({...}, {...})                                    ← multiple dicts
+          - .add(*[{...}, {...}])                                 ← list of dicts
+        """
+        new_items = []
+
+        # Case: single item from keyword args
+        if kwargs:
+            item = self._item_class(**kwargs)
+            new_items.append(item)
+
+        # Case: one or more dicts passed as positional args
+        for arg in args:
+            if isinstance(arg, dict):
+                item = self._item_class(**arg)
+                new_items.append(item)
+            elif isinstance(arg, list):
+                for inner in arg:
+                    if not isinstance(inner, dict):
+                        raise TypeError(f"Expected dict in list, got {type(inner)}")
+                    item = self._item_class(**inner)
+                    new_items.append(item)
+            else:
+                raise TypeError(f"Unsupported argument type: {type(arg)}")
+
+        # Set parent context and append
+        for item in new_items:
+            item._parent = self._parent
+            item._parent_key = self._field_name
+            self.append(item)
+
+        return new_items[0] if len(new_items) == 1 else new_items
 
     def to_serializable(self):
         return [item.to_dict() if isinstance(item, MongoModel) else item for item in self]
