@@ -632,21 +632,6 @@ class MongoModel:
     @classmethod
     def print_nested_class_tree(cls, prefix="", is_last=True, seen=None, *, show_scalars=True, max_depth=None,
                                 color=True, _depth=0):
-        """
-        Recursively print a visual tree of nested model classes and field types.
-
-        This method helps inspect deeply nested schemas by showing the object hierarchy,
-        including scalar fields, array item types, and nested MongoModel subclasses.
-
-        Args:
-            prefix (str): Internal use for indentation spacing.
-            is_last (bool): Whether this is the last child in its level.
-            seen (set): Tracks visited classes to avoid infinite recursion.
-            show_scalars (bool): Whether to include scalar fields in the output.
-            max_depth (int): Optional limit on tree depth.
-            color (bool): Whether to use ANSI color codes in output.
-            _depth (int): Internal depth tracker (do not pass explicitly).
-        """
         if seen is None:
             seen = set()
 
@@ -662,17 +647,37 @@ class MongoModel:
                 return text
             return f"\033[{color_code}m{text}\033[0m"
 
-        def type_label(bson_type):
+        def type_label(field_schema):
+            bson_type = field_schema.get("bsonType") or field_schema.get("type")
+            enum = field_schema.get("enum")
             type_map = {
                 "string": "str", "int": "int", "bool": "bool", "double": "float",
                 "objectId": "ObjectId", "date": "datetime", "array": "List",
                 "object": "Object", "null": "None", "long": "int"
             }
-            if isinstance(bson_type, list):
-                return " | ".join([type_map.get(t, t) for t in bson_type])
-            return type_map.get(bson_type, bson_type)
 
-        connector = "└── " if is_last else "├── "
+            typename = None
+            if isinstance(bson_type, list):
+                typename = " | ".join([type_map.get(t, t) for t in bson_type])
+            elif bson_type:
+                typename = type_map.get(bson_type, str(bson_type))
+
+            # Show "enum" if no type is defined but enum exists
+            if not typename and enum:
+                typename = "enum"
+
+            # Add enum info for scalar fields
+            if enum:
+                typename += f" [{', '.join(map(str, enum))}]"
+
+            # Add enum info for arrays of scalars
+            if bson_type == "array":
+                item_schema = field_schema.get("items", {})
+                item_enum = item_schema.get("enum")
+                if item_enum:
+                    typename += f" [{', '.join(map(str, item_enum))}]"
+
+            return typename
 
         if _depth == 0:
             print(prefix + "└── " + c(cls.__name__, "96"))
@@ -681,8 +686,8 @@ class MongoModel:
         children = []
 
         for field_name, field_schema in props.items():
+            typename = type_label(field_schema)
             bson_type = field_schema.get("bsonType") or field_schema.get("type")
-            typename = type_label(bson_type)
             nested_class = None
 
             if bson_type == "object":
@@ -691,8 +696,6 @@ class MongoModel:
                 nested_class = getattr(cls, f"{field_name}_item", None)
                 if nested_class:
                     typename = f"List[{field_name}_item]"
-                else:
-                    typename = "List"
 
             if nested_class:
                 children.append((field_name, typename, nested_class))
