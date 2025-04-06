@@ -37,6 +37,10 @@ print(new_person)
 # Modify and resave
 new_person.health.primary_physician.contact.phone = "123-456-7890"
 
+# add an address
+address1 = People.addresses_item(type="home",street="456 Maple St",city="Panama",state="NJ",zip="14862")
+new_person.addresses.append(address1)
+
 print()
 print("Serialized before save:", new_person.to_dict())
 

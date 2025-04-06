@@ -17,6 +17,9 @@ from bson import ObjectId
 from decimal import Decimal
 from typing import Any, List, Dict
 
+# ----------------------------------------------------------------------------------
+# BSON Type Mapping (used to validate types from MongoDB schema)
+# ----------------------------------------------------------------------------------
 BSON_TYPE_MAP = {
     "string": str,
     "int": int,
@@ -33,14 +36,25 @@ BSON_TYPE_MAP = {
     "array": list,
 }
 
+# ----------------------------------------------------------------------------------
+# MongoModel - A dynamic schema-driven base model for MongoDB documents
+# ----------------------------------------------------------------------------------
 class MongoModel:
-    _schema = {}
-    _collection_name = ""
-    _db_name = ""
-    _db = None
+    """
+    Base class for dynamically generated MongoDB schema-driven models.
+    Automatically handles type validation, nested object/array instantiation,
+    MongoDB persistence (CRUD), and schema introspection.
+    """
 
-    timestamps_enabled = True  # Class-level option to enable or disable timestamps
+    _schema = {}  # JSON schema for the model
+    _collection_name = ""  # MongoDB collection name
+    _db_name = ""  # MongoDB database name (unused, optional)
+    _db = None  # Reference to the active MongoDB client DB object
+    timestamps_enabled = True  # Toggle automatic management of created_at/last_modified timestamps
 
+    # ----------------------------------------------------------------------------------
+    # Validate a value against its schema-defined BSON type
+    # ----------------------------------------------------------------------------------
     def _validate_field_type(self, name, value):
         if name.startswith("_"):
             return
@@ -58,12 +72,13 @@ class MongoModel:
         else:
             expected_types = [BSON_TYPE_MAP.get(bson_type, object)]
 
-        # 👇 Special handling for dynamically generated object/array classes
+        # Accept dynamically generated nested object types
         if bson_type == "object":
             nested_class = getattr(self.__class__, f"__class_for__{name}", None)
             if nested_class and isinstance(value, nested_class):
                 return
 
+        # Accept arrays of valid nested objects
         if bson_type == "array":
             if isinstance(value, list):
                 item_class = getattr(self.__class__, f"{name}_item", None)
@@ -75,10 +90,13 @@ class MongoModel:
                 f"Invalid type for field '{name}': expected {expected_types}, got {type(value).__name__}"
             )
 
+    # ----------------------------------------------------------------------------------
+    # Initialize the model with optional keyword data
+    # ----------------------------------------------------------------------------------
     def __init__(self, **kwargs):
-        self._data = {}
-        self._parent = None
-        self._parent_key = None
+        self._data = {}  # Holds all dynamic field values
+        self._parent = None  # Reference to parent object (used for dirty propagation)
+        self._parent_key = None  # Field name this object is nested under
 
         self._db = getattr(self.__class__, "__db__", None)
         self._collection_name = getattr(self.__class__, "__collection__", None)
@@ -86,6 +104,9 @@ class MongoModel:
         for key, value in kwargs.items():
             setattr(self, key, value)
 
+    # ----------------------------------------------------------------------------------
+    # Dynamic getter - supports nested objects and auto-initializes empty arrays
+    # ----------------------------------------------------------------------------------
     def __getattr__(self, name):
         if name in self._data:
             val = self._data[name]
@@ -94,6 +115,7 @@ class MongoModel:
                 val._parent_key = name
             return val
 
+        # Auto-instantiate nested object
         nested_class = getattr(self.__class__, name, None)
 
         if isinstance(nested_class, type) and issubclass(nested_class, MongoModel):
@@ -103,8 +125,19 @@ class MongoModel:
             self._data[name] = instance
             return instance
 
+        # Auto-initialize empty array for list fields
+        if name in self._schema.get("properties", {}):
+            field_schema = self._schema["properties"][name]
+            bson_type = field_schema.get("bsonType") or field_schema.get("type")
+            if bson_type == "array":
+                self._data[name] = []
+                return self._data[name]
+
         raise AttributeError(f"{self.__class__.__name__} has no attribute '{name}'")
 
+    # ----------------------------------------------------------------------------------
+    # Dynamic setter - validates type and handles dirty propagation
+    # ----------------------------------------------------------------------------------
     def __setattr__(self, name, value):
         if name in {
             "_schema", "_collection_name", "_db_name", "_db",
@@ -116,6 +149,7 @@ class MongoModel:
         value = self._deserialize_field(name, value)
         self._validate_field_type(name, value)
 
+        # Track parent context
         if isinstance(value, MongoModel):
             value._parent = self
             value._parent_key = name
@@ -128,11 +162,17 @@ class MongoModel:
         self._data[name] = value
         self._mark_dirty()
 
+    # ----------------------------------------------------------------------------------
+    # Mark the parent as dirty (used when nested fields change)
+    # ----------------------------------------------------------------------------------
     def _mark_dirty(self):
         if hasattr(self, "_parent") and self._parent and hasattr(self, "_parent_key"):
             self._parent._data[self._parent_key] = self
             self._parent._mark_dirty()
 
+    # ----------------------------------------------------------------------------------
+    # Deserialize nested objects/arrays based on schema
+    # ----------------------------------------------------------------------------------
     def _deserialize_field(self, name, value):
         schema_props = self._schema.get("properties", {})
         field_schema = schema_props.get(name, {})
@@ -158,6 +198,9 @@ class MongoModel:
 
         return value
 
+    # ----------------------------------------------------------------------------------
+    # Serialize nested objects into dictionaries for MongoDB
+    # ----------------------------------------------------------------------------------
     def to_dict(self):
         return self._serialize_data()
 
@@ -172,6 +215,9 @@ class MongoModel:
                 result[k] = v
         return result
 
+    # ----------------------------------------------------------------------------------
+    # MongoDB Write Operations
+    # ----------------------------------------------------------------------------------
     def save(self):
         if self.timestamps_enabled:
             self.last_modified = datetime.utcnow()
@@ -219,14 +265,29 @@ class MongoModel:
     def delete(self):
         self._db[self._collection_name].delete_one({"_id": self._data["_id"]})
 
+    # ----------------------------------------------------------------------------------
+    # Introspection & Representation
+    # ----------------------------------------------------------------------------------
     def __repr__(self):
         return f"{self.__class__.__name__}({self._data})"
 
     def __dir__(self):
         return sorted(set(super().__dir__()) | set(self._data.keys()))
 
+    # ----------------------------------------------------------------------------------
+    # MongoDB Read/Query Operations (class methods)
+    # ----------------------------------------------------------------------------------
     @classmethod
     def from_dict(cls, data: dict):
+        """
+        Create an instance of this model from a dictionary of field values.
+
+        Args:
+            data (dict): A dictionary where keys are field names and values are field data.
+
+        Returns:
+            MongoModel: An initialized instance populated with data.
+        """
         instance = cls()
         for key, value in data.items():
             setattr(instance, key, value)
@@ -234,7 +295,15 @@ class MongoModel:
 
     @classmethod
     def find_one(cls, filter: dict) -> Any:
-        """Find one document by filter."""
+        """
+        Find and return a single document matching the given filter.
+
+        Args:
+            filter (dict): MongoDB filter query.
+
+        Returns:
+            MongoModel | None: Instance of the model if found, otherwise None.
+        """
         doc = cls._get_collection().find_one(filter)
         if doc:
             return cls.from_dict(doc)
@@ -242,7 +311,17 @@ class MongoModel:
 
     @classmethod
     def find_many(cls, filter: dict = None, sort=None, limit=0) -> List[Any]:
-        """Find multiple documents by filter, supporting optional sort and limit."""
+        """
+        Find and return a list of documents matching the given filter.
+
+        Args:
+            filter (dict, optional): MongoDB filter query. Defaults to None (match all).
+            sort (list, optional): A list of (field, direction) tuples for sorting.
+            limit (int, optional): Maximum number of results to return.
+
+        Returns:
+            List[MongoModel]: A list of model instances.
+        """
         cursor = cls._get_collection().find(filter or {})
         if sort:
             cursor = cursor.sort(sort)
@@ -252,34 +331,107 @@ class MongoModel:
 
     @classmethod
     def find_by_id(cls, _id):
+        """
+        Find a document by its MongoDB _id field.
+
+        Args:
+            _id: The ObjectId or value of the _id field.
+
+        Returns:
+            dict | None: The raw MongoDB document, or None.
+        """
         return cls._get_collection().find_one({"_id": _id})
 
     @classmethod
     def delete_one(cls, filter: dict):
+        """
+        Delete a single document that matches the filter.
+
+        Args:
+            filter (dict): MongoDB filter query.
+
+        Returns:
+            DeleteResult: MongoDB deletion result.
+        """
         return cls._get_collection().delete_one(filter)
 
     @classmethod
     def delete_many(cls, filter: dict):
+        """
+        Delete multiple documents that match the filter.
+
+        Args:
+            filter (dict): MongoDB filter query.
+
+        Returns:
+            DeleteResult: MongoDB deletion result.
+        """
         return cls._get_collection().delete_many(filter)
 
     @classmethod
     def update_one(cls, filter: dict, update: dict, upsert: bool = False):
+        """
+        Update a single document.
+
+        Args:
+            filter (dict): Query to find the document.
+            update (dict): Update operations.
+            upsert (bool): Whether to insert the document if it doesn't exist.
+
+        Returns:
+            UpdateResult: MongoDB update result.
+        """
         return cls._get_collection().update_one(filter, update, upsert=upsert)
 
     @classmethod
     def update_many(cls, filter: dict, update: dict, upsert: bool = False):
+        """
+        Update multiple documents.
+
+        Args:
+            filter (dict): Query to find documents.
+            update (dict): Update operations.
+            upsert (bool): Whether to insert documents if none match.
+
+        Returns:
+            UpdateResult: MongoDB update result.
+        """
         return cls._get_collection().update_many(filter, update, upsert=upsert)
 
     @classmethod
     def count_documents(cls, filter: dict = None):
+        """
+        Count the number of documents that match the filter.
+
+        Args:
+            filter (dict, optional): MongoDB query filter. Defaults to match all.
+
+        Returns:
+            int: Number of matching documents.
+        """
         return cls._get_collection().count_documents(filter or {})
 
     @classmethod
     def exists(cls, filter: dict) -> bool:
+        """
+       Check if at least one document matches the given filter.
+
+       Args:
+           filter (dict): MongoDB query filter.
+
+       Returns:
+           bool: True if one or more documents match.
+       """
         return cls._get_collection().count_documents(filter, limit=1) > 0
 
     @classmethod
     def ensure_indexes(cls):
+        """
+        Ensure indexes are created for fields defined with 'index' in the schema.
+
+        Iterates through the schema's properties and creates ascending indexes
+        on fields that contain an 'index' key. Useful for performance optimization.
+        """
         collection = cls._get_collection()
         for field, details in cls._schema.get('properties', {}).items():
             if 'index' in details:
@@ -287,18 +439,60 @@ class MongoModel:
 
     @classmethod
     def distinct_values(cls, field: str):
+        """
+        Retrieve all distinct values for a specified field in the collection.
+
+        Args:
+            field (str): Name of the field.
+
+        Returns:
+            List[Any]: A list of distinct values.
+        """
         return cls._get_collection().distinct(field)
 
     @classmethod
     def aggregate(cls, pipeline: List[dict]):
+        """
+        Run an aggregation pipeline on the collection.
+
+        Args:
+            pipeline (List[dict]): A list of aggregation stages.
+
+        Returns:
+            List[dict]: The aggregation result set.
+        """
         return list(cls._get_collection().aggregate(pipeline))
 
     @classmethod
     def find_and_modify(cls, filter: dict, update: dict, upsert: bool = False):
+        """
+        Atomically find and update a document.
+
+        Args:
+            filter (dict): Filter to locate the document.
+            update (dict): Update operations.
+            upsert (bool): If True, insert the document if not found.
+
+        Returns:
+            dict | None: The document before update, or None.
+        """
         return cls._get_collection().find_one_and_update(filter, update, upsert=upsert)
 
     @classmethod
     def validate_schema(cls, data: dict):
+        """
+        Validate a data dictionary against the class schema.
+
+        Args:
+            data (dict): The input dictionary to validate.
+
+        Raises:
+            ValueError: If a field is not in the schema.
+            TypeError: If the field type does not match expected BSON type.
+
+        Returns:
+            bool: True if data is valid.
+        """
         for field, value in data.items():
             if field not in cls._schema['properties']:
                 raise ValueError(f"Field {field} is not in schema")
@@ -309,15 +503,33 @@ class MongoModel:
 
     @classmethod
     def bulk_write(cls, operations: List[Dict]):
+        """
+        Execute a batch of bulk operations (e.g., insert, update, delete).
+
+        Args:
+            operations (List[Dict]): A list of write operations.
+
+        Returns:
+            BulkWriteResult: MongoDB result object.
+        """
         return cls._get_collection().bulk_write(operations)
 
     @classmethod
     def pretty_print_schema(cls):
+        """
+        Nicely print the current MongoModel schema for inspection/debugging.
+        """
         import pprint
         pprint.pprint(cls._schema, indent=2)
 
     @classmethod
     def get_nested_classes(cls):
+        """
+        Recursively retrieve all nested MongoModel subclasses defined within this class.
+
+        Returns:
+            dict: A flat map where keys are attribute names and values are class references.
+        """
         result = {}
 
         for attr_name in dir(cls):
@@ -331,6 +543,21 @@ class MongoModel:
     @classmethod
     def print_nested_class_tree(cls, prefix="", is_last=True, seen=None, *, show_scalars=True, max_depth=None,
                                 color=True, _depth=0):
+        """
+        Recursively print a visual tree of nested model classes and field types.
+
+        This method helps inspect deeply nested schemas by showing the object hierarchy,
+        including scalar fields, array item types, and nested MongoModel subclasses.
+
+        Args:
+            prefix (str): Internal use for indentation spacing.
+            is_last (bool): Whether this is the last child in its level.
+            seen (set): Tracks visited classes to avoid infinite recursion.
+            show_scalars (bool): Whether to include scalar fields in the output.
+            max_depth (int): Optional limit on tree depth.
+            color (bool): Whether to use ANSI color codes in output.
+            _depth (int): Internal depth tracker (do not pass explicitly).
+        """
         if seen is None:
             seen = set()
 

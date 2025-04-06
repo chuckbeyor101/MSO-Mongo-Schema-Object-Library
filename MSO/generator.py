@@ -55,19 +55,20 @@ def generate_nested_class(name, schema, class_map):
             annotations[prop] = Optional[nested_class]
 
         elif bson_type == 'array':
+
             item_def = details.get('items', {})
+
             item_type = normalize_bson_type(item_def.get('bsonType', ''))
 
             if item_type == 'object':
                 nested_class = generate_nested_class(f"{name}_{prop}_item", item_def, class_map)
 
-                # Attach item class to parent for introspection
+                # Attach item class to parent class so it can be used for construction
+
                 class_attrs[f"{prop}_item"] = nested_class
 
-                list_wrapper = type(f"{name}_{prop}", (list,), {})
-                list_wrapper._item_type = nested_class
-                class_attrs[prop] = list_wrapper
-                annotations[prop] = Optional[list]
+            annotations[prop] = Optional[list]
+
 
         else:
             annotations[prop] = Optional[Any]
