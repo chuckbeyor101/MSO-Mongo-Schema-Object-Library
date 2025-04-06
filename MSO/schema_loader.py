@@ -9,7 +9,7 @@
 #  See the License for the specific language governing permissions and                                                 #
 #  limitations under the License.                                                                                      #
 #                                                                                                                      #
-#  Gitlab: https://github.com/chuckbeyor101/MSO-Mongo-Schema-Object-Library-                                           #
+#  Gitlab: https://github.com/chuckbeyor101/MSO-Mongo-Schema-Object-Library                                            #
 # ######################################################################################################################
 
 def load_schema(db, collection_name):
