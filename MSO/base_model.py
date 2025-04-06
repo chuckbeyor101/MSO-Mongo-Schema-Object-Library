@@ -40,8 +40,11 @@ BSON_TYPE_MAP = {
 # ----------------------------------------------------------------------------------
 class ListFieldWrapper(list):
     """
-    A custom list wrapper that adds `.add()` for schema-aware item creation
-    and prevents schema field overwrites from array item changes.
+    Custom list wrapper that adds:
+    - .add(**kwargs) to create and append a nested item
+    - .remove_by(**criteria) to remove items matching criteria
+    - .remove_all_by(**criteria) to remove all matching items
+    - .remove_at(index) to remove an item at a specific index
     """
     def __init__(self, parent, field_name, item_class, initial=None):
         super().__init__(initial or [])
