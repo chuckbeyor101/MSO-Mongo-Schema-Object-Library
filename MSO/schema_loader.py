@@ -13,7 +13,16 @@
 # ######################################################################################################################
 
 def load_schema(db, collection_name):
-    collection_info = db.command('listCollections', filter={"name": collection_name})
-    options = collection_info['cursor']['firstBatch'][0].get('options', {})
-    schema = options.get('validator', {}).get('$jsonSchema', {})
+    collection_info = db.command("listCollections", filter={"name": collection_name})
+    collections = collection_info.get("cursor", {}).get("firstBatch", [])
+
+    if not collections:
+        raise ValueError(f"Collection '{collection_name}' does not exist or has no $jsonSchema validator.")
+
+    options = collections[0].get("options", {})
+    schema = options.get("validator", {}).get("$jsonSchema")
+
+    if not schema:
+        raise ValueError(f"Collection '{collection_name}' does not define a $jsonSchema validator.")
+
     return schema
