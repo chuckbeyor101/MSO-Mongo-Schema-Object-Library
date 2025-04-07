@@ -26,7 +26,6 @@ db = client[MONGO_DB]
 # Get the model for the collection
 People = get_model(db, "people")
 
-
 # Disable timestamps for a specific model or instance
 People.timestamps_enabled = False
 

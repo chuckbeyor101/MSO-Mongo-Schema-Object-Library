@@ -159,6 +159,41 @@ pprint(diff)
 person_dict = person.to_dict()
 ```
 
+# ⏱ Automatic Timestamps
+By default, models automatically include created_at and updated_at fields to track when a document is created or modified. These are managed internally and do not need to be defined in your schema.
+
+### 🔧 How it works
+created_at is set once, when the document is first saved.
+
+updated_at is updated every time the document is modified and saved.
+
+Both are stored as UTC datetime.datetime objects.
+
+### 🚫 Disabling timestamps
+Timestamps are enabled by default. To disable them, set the `timestamps` parameter to `False` when creating a model.
+
+```python
+import os
+from time import sleep
+from pymongo import MongoClient
+from MSO.generator import get_model
+
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+MONGO_DB = os.getenv("MONGO_DB", "mydb")
+
+client = MongoClient(MONGO_URI)
+db = client[MONGO_DB]
+
+# Get the model for the collection
+People = get_model(db, "people")
+
+# Disable timestamps for a specific model or instance
+People.timestamps_enabled = False
+```
+
+
+
+
 # 🧩 Lifecycle Hooks
 You can use decorators like @pre_save, @post_save, @pre_delete, and @post_delete to hook into model lifecycle events. This is useful for setting defaults, cleaning up, triggering logs, or validating conditions.
 ### Example: Automatically output a message when a document is saved
