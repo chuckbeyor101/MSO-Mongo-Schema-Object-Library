@@ -53,7 +53,7 @@ person.address.add(type="home", street="123 Elm", city="NY", state="NY", zip="10
 person.save()
 ```
 
-# 🧪 Want to Explore?
+# 🧪 View Your Class Tree
 ```python
 People.print_nested_class_tree()
 ```
@@ -108,6 +108,80 @@ person.delete()
 
 # Clone
 new_person = person.clone()
+```
+# 📊 Data Summary & Analysis
+MSO includes a powerful .summarize() method to help you quickly explore and understand your MongoDB collection. It performs a field-level summary with support for:
+
+### ⚙️ Options
+**sample_size**: Limit the number of documents to analyze (defaults to all)
+
+**top**: Number of top strings to return (default: 5)
+
+### 🔍 Example
+```python
+import os
+from pymongo import MongoClient
+from MSO.generator import get_model
+
+# Connect to MongoDB
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+MONGO_DB = os.getenv("MONGO_DB", "mydb")
+
+client = MongoClient(MONGO_URI)
+db = client[MONGO_DB]
+
+# Get the model for the "people" collection
+People = get_model(db, "people")
+
+print(People.summarize(top=10))
+```
+### 🧠 Example Output
+```bash
+{
+  "sample_size": 1000,
+  "fields": {
+    "name": {
+      "type": "str",
+      "count": 1000,
+      "missing": 0,
+      "unique": 993,
+      "top_5": [
+        {
+          "value": "Tony Pajama",
+          "count": 7,
+          "percent": 0.007
+        },
+        ...
+      ]
+    },
+    "age": {
+      "type": "int",
+      "count": 978,
+      "missing": 22,
+      "unique": 43,
+      "min": 1,
+      "max": 99,
+      "mean": 38.6,
+      "median": 34,
+      "stdev": 19.2
+    },
+    "health.primary_physician.name": {
+      "type": "str",
+      "count": 1000,
+      "missing": 0,
+      "unique": 12,
+      "top_5": [
+        {
+          "value": "Dr. Strange",
+          "count": 46,
+          "percent": 0.046
+        },
+        ...
+      ]
+    }
+  }
+}
+
 ```
 
 # 🔍 Document Comparison

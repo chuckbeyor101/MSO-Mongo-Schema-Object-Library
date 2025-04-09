@@ -16,7 +16,9 @@ from datetime import datetime
 from bson import ObjectId
 from decimal import Decimal
 from typing import Any, List, Dict
-from copy import deepcopy
+import pandas as pd
+import json
+from collections import Counter, defaultdict
 
 # ----------------------------------------------------------------------------------
 # BSON Type Mapping (used to validate types from MongoDB schema)
@@ -1025,6 +1027,115 @@ class MongoModel:
             for field, details in props.items()
             if "enum" in details
         }
+
+    # ----------------------------------------------------------------------------------
+    # Data Analysis & Reporting
+    # ----------------------------------------------------------------------------------
+    @classmethod
+    def summarize(cls, sample_size=None, top: int = 5):
+        """
+        Summarize collection data across all documents.
+
+        Args:
+            sample_size (int, optional): Number of documents to sample. Defaults to None (all).
+            top (int): Number of top values to include for string fields.
+
+        Returns:
+            str: JSON summary with key metrics and top values per field.
+        """
+        import json
+        from statistics import mean, median, stdev
+        from collections import Counter, defaultdict
+
+        def flatten(doc, prefix=''):
+            """Flatten nested dictionaries using dot notation."""
+            out = {}
+            for k, v in doc.items():
+                key = f"{prefix}.{k}" if prefix else k
+                if isinstance(v, dict):
+                    out.update(flatten(v, key))
+                elif isinstance(v, list):
+                    for i, item in enumerate(v):
+                        if isinstance(item, dict):
+                            out.update(flatten(item, f"{key}[{i}]"))
+                        else:
+                            out[f"{key}[{i}]"] = item
+                else:
+                    out[key] = v
+            return out
+
+        def analyze(values):
+            stats = {}
+
+            cleaned = [v for v in values if v is not None]
+
+            if not cleaned:
+                return {"count": 0}
+
+            sample = cleaned[:10]
+            dtype = type(sample[0])
+
+            stats["type"] = dtype.__name__
+            stats["count"] = len(values)
+            stats["missing"] = values.count(None)
+            stats["unique"] = len(set(cleaned))
+
+            total = len(cleaned)
+
+            if dtype in (int, float):
+                try:
+                    stats.update({
+                        "min": min(cleaned),
+                        "max": max(cleaned),
+                        "mean": round(mean(cleaned), 2),
+                        "median": round(median(cleaned), 2),
+                        "stdev": round(stdev(cleaned), 2) if len(cleaned) > 1 else 0
+                    })
+                except Exception:
+                    pass
+
+            elif dtype == str:
+                counter = Counter(cleaned)
+                top_items = counter.most_common(top)
+                stats[f"top_{top}"] = [
+                    {
+                        "value": val,
+                        "count": cnt,
+                        "percent": round(cnt / len(cleaned), 3)
+                    } for val, cnt in Counter(cleaned).most_common(top)
+                ]
+
+            elif dtype == bool:
+                stats["true"] = cleaned.count(True)
+                stats["false"] = cleaned.count(False)
+
+            elif dtype in (datetime, ObjectId):
+                stats["min"] = min(cleaned)
+                stats["max"] = max(cleaned)
+
+            return stats
+
+        # Load and sample from MongoDB
+        collection = cls._get_collection()
+        cursor = collection.find()
+        if sample_size:
+            cursor = cursor.limit(sample_size)
+
+        all_docs = list(cursor)
+        field_data = defaultdict(list)
+
+        for doc in all_docs:
+            flat = flatten(doc)
+            for field, value in flat.items():
+                field_data[field].append(value)
+
+        result = {
+            "sample_size": len(all_docs),
+            "fields": {field: analyze(vals) for field, vals in field_data.items()}
+        }
+
+        return json.dumps(result, default=str, indent=2)
+
 
 # ----------------------------------------------------------------------------------
 # Lifecycle Hook Functions
