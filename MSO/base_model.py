@@ -513,6 +513,8 @@ class MongoModel:
         elif hasattr(self, '_id') and not self._id:
             # remove _id to avoid validation error
             del self._data["_id"]
+            self_dict = self.to_dict()
+            self._get_collection().insert_one(self_dict)
         else:
             self_dict = self.to_dict()
             self._get_collection().insert_one(self_dict)
