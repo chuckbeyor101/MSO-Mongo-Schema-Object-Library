@@ -28,6 +28,34 @@
 pip install --upgrade git+https://github.com/chuckbeyor101/MSO-Mongo-Schema-Object-Library.git
 ```
 
+# Recommended MongoDB Validation Schema Format
+```bash
+{
+  $jsonSchema: {
+    bsonType: 'object',
+    properties: {
+      _id: {
+        bsonType: 'objectId'
+      },
+      # ADD YOUR FIELDS HERE
+      last_modified: {
+        bsonType: [
+          'date',
+          'null'
+        ]
+      },
+      created_at: {
+        bsonType: [
+          'date',
+          'null'
+        ]
+      }
+    },
+    additionalProperties: false
+  }
+}
+```
+
 # 🛠️ Basic Usage
 In this basic example we have already created a $jsonSchema validator for the "People" collection in MongoDB. We create a new person, update some information and save the person MongoDB.
 
