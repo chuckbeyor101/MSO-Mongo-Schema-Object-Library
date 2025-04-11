@@ -506,6 +506,8 @@ class MongoModel:
             self.last_modified = datetime.utcnow()
             if not hasattr(self, 'created_at'):
                 self.created_at = self.last_modified
+            elif hasattr(self, 'created_at') and not self.created_at:
+                self.created_at = self.last_modified
 
         # Call the actual save method (e.g., insert or update)
         if hasattr(self, '_id') and self._id:  # If document already has _id, and its not none, it's an update
