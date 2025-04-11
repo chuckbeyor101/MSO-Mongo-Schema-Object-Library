@@ -510,6 +510,9 @@ class MongoModel:
         # Call the actual save method (e.g., insert or update)
         if hasattr(self, '_id') and self._id:  # If document already has _id, and its not none, it's an update
             self._get_collection().replace_one({"_id": self._id}, self.to_dict())
+        elif hasattr(self, '_id') and not self._id:
+            # remove _id to avoid validation error
+            del self._data["_id"]
         else:
             self_dict = self.to_dict()
             self._get_collection().insert_one(self_dict)
