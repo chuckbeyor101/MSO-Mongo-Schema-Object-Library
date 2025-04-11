@@ -508,7 +508,7 @@ class MongoModel:
                 self.created_at = self.last_modified
 
         # Call the actual save method (e.g., insert or update)
-        if hasattr(self, '_id'):  # If document already has _id, it's an update
+        if hasattr(self, '_id') and self._id:  # If document already has _id, and its not none, it's an update
             self._get_collection().replace_one({"_id": self._id}, self.to_dict())
         else:
             self_dict = self.to_dict()
