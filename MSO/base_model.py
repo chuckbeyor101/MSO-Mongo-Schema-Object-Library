@@ -517,9 +517,14 @@ class MongoModel:
             del self._data["_id"]
             self_dict = self.to_dict()
             self._get_collection().insert_one(self_dict)
+            # refresh to get the ID generated during the save
+            self.refresh()
         else:
             self_dict = self.to_dict()
             self._get_collection().insert_one(self_dict)
+            # refresh to get the ID generated during the save
+            self.refresh()
+
 
         self._run_hooks(self.__class__._post_save_hooks)
         return self
