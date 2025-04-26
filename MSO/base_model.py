@@ -28,6 +28,7 @@ BSON_TYPE_MAP = {
     "int": int,
     "bool": bool,
     "double": float,
+    "float": float,
     "date": datetime,
     "objectId": ObjectId,
     "binData": bytes,
@@ -228,6 +229,46 @@ class MongoModel:
     # ----------------------------------------------------------------------------------
     # Validate a value against its schema-defined BSON type
     # ----------------------------------------------------------------------------------
+    def coerce_type(self,value, expected_types):
+        """
+        Attempt to coerce 'value' to one of the 'expected_types'.
+        If coercion succeeds, returns coerced value.
+        If it fails, raises TypeError.
+        """
+        for t in expected_types:
+            try:
+                print(f"Attempting to coerce {value} to {t}")
+                if t is int:
+                    return int(value)
+                elif t is float:
+                    return float(value)
+                elif t is str:
+                    return str(value)
+                elif t is bool:
+                    if isinstance(value, str):
+                        return value.lower() in ['true', '1', 'yes']
+                    return bool(value)
+                elif t is datetime:
+                    if isinstance(value, str):
+                        return datetime.fromisoformat(value)
+                    elif isinstance(value, (int, float)):
+                        return datetime.fromtimestamp(value)
+                elif t is ObjectId:
+                    return ObjectId(value)
+                elif t is list:
+                    if not isinstance(value, list):
+                        return [value]
+                    return value
+                elif t is dict:
+                    if isinstance(value, dict):
+                        return value
+            except Exception:
+                continue  # Try next possible type
+        # If none succeeded
+        raise TypeError(
+            f"Could not coerce value '{value}' ({type(value).__name__}) to any of {expected_types}"
+        )
+
     def _validate_field_type(self, name, value):
         """
         Validates the given field's value using the class schema.
@@ -304,18 +345,18 @@ class MongoModel:
                 # SCALAR VALIDATION
                 expected_item_type = BSON_TYPE_MAP.get(item_type, object)
                 if not isinstance(item, expected_item_type):
-                    raise TypeError(
-                        f"Invalid item type in field '{name}[{i}]': expected {expected_item_type}, got {type(item).__name__}"
-                    )
+                    # Attempt coercion since initial type check failed
+                    value = self.coerce_type(item, [expected_item_type])
             return
 
         # ----------------------------
         # BASIC SCALAR TYPE CHECK
         # ----------------------------
         if not any(isinstance(value, t) for t in expected_types):
-            raise TypeError(
-                f"Invalid type for field '{name}': expected {expected_types}, got {type(value).__name__}"
-            )
+            # Attempt coercion since initial type check failed
+            value = self.coerce_type(value, expected_types)
+
+
 
     # ----------------------------------------------------------------------------------
     # Initialize the model
