@@ -237,7 +237,6 @@ class MongoModel:
         """
         for t in expected_types:
             try:
-                print(f"Attempting to coerce {value} to {t}")
                 if t is int:
                     return int(value)
                 elif t is float:
