@@ -7,6 +7,7 @@ on:
 
 jobs:
   details:
+    name: Prepare Data
     runs-on: ubuntu-latest
     outputs:
       package_name: ${{ steps.package_information.outputs.package_name }}
@@ -79,11 +80,11 @@ jobs:
           fi
 
   setup_and_build:
+    name: Setup & Build
     needs: details
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
@@ -156,7 +157,9 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
 
   merge-branch:
+    name: Merge Changes To Master Branch
     runs-on: ubuntu-latest
+    needs: [setup_and_build, details, pypi_publish]
     steps:
       - uses: actions/checkout@master
 
