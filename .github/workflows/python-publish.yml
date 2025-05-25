@@ -96,60 +96,30 @@ jobs:
 
       - name: Bump version in pyproject.toml
         run: |
-          grep "version" pyproject.toml
           poetry version ${{ needs.details.outputs.new_version }}
-          grep "version" pyproject.toml
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           git checkout -b version-bump-${{ needs.details.outputs.new_version }}
           git add pyproject.toml
           git commit -m "Bump version to ${{ needs.details.outputs.new_version }}"
-          git status
-          grep "version" pyproject.toml
           git push origin version-bump-${{ needs.details.outputs.new_version }}
-          git status
-          grep "version" pyproject.toml
-          git checkout master
 
-      - name: Check branch info and version in pyproject.toml
-        run: |
-          git status
-          git rev-parse HEAD
-          grep "version" pyproject.toml
 
-      - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v4
-        with:
-          branch: version-bump-${{ needs.details.outputs.new_version }}
-          title: "Bump version to ${{ needs.details.outputs.new_version }}"
-          body: "This PR bumps the version to ${{ needs.details.outputs.new_version }}."
-          labels: "version-bump"
-
-      - name: Check branch info and version in pyproject.toml
-        run: |
-          git status
-          git rev-parse HEAD
-          grep "version" pyproject.toml
+#      - name: Create Pull Request
+#        uses: peter-evans/create-pull-request@v4
+#        with:
+#          branch: version-bump-${{ needs.details.outputs.new_version }}
+#          title: "Bump version to ${{ needs.details.outputs.new_version }}"
+#          body: "This PR bumps the version to ${{ needs.details.outputs.new_version }}."
+#          labels: "version-bump"
 
       - name: Install dependencies
         run: | 
           poetry install --sync --no-interaction
 
-      - name: Check branch info and version in pyproject.toml
-        run: |
-          git status
-          git rev-parse HEAD
-          grep "version" pyproject.toml
-
       - name: Build source and wheel distribution
         run: |
           poetry build
-
-      - name: Check branch info and version in pyproject.toml
-        run: |
-          git status
-          git rev-parse HEAD
-          grep "version" pyproject.toml
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -184,3 +154,15 @@ jobs:
 
       - name: Publish distribution to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+
+  merge-branch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@master
+
+      - name: Merge version-bump-${{ needs.details.outputs.new_version }} -> master
+        uses: devmasx/merge-branch@master
+        with:
+          type: now
+          target_branch: master
+          message: Bump version to ${{ needs.details.outputs.new_version }}
