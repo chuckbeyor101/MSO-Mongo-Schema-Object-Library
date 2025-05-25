@@ -103,20 +103,10 @@ jobs:
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           git checkout -b version-bump-${{ needs.details.outputs.new_version }}
-          
-          git status 
-          cat pyproject.toml
-          
           git add pyproject.toml
-          
-          git status 
-          cat pyproject.toml
-          
           git commit -m "Bump version to $VERSION"
           git push origin version-bump-${{ needs.details.outputs.new_version }}
-          
-          git status 
-          cat pyproject.toml
+
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v7
@@ -128,7 +118,10 @@ jobs:
           labels: "version-bump"
 
       - name: Install dependencies
-        run: poetry install --sync --no-interaction
+        run: | 
+          git status 
+          cat pyproject.toml
+          poetry install --sync --no-interaction
 
       - name: Build source and wheel distribution
         run: |
