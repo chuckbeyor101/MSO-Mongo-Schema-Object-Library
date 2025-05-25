@@ -2,8 +2,6 @@ name: release
 
 on:
   push:
-    branches:
-      - master
     tags:
       - "*"
 
@@ -105,7 +103,7 @@ jobs:
           git config user.email "actions@github.com"
           git checkout -b version-bump-${{ needs.details.outputs.new_version }}
           git add pyproject.toml
-          git commit -m "Bump version to $NEW_VERSION"
+          git commit -m "Bump version to ${{ needs.details.outputs.new_version }}"
           git status
           grep "version" pyproject.toml
           git push origin version-bump-${{ needs.details.outputs.new_version }}
@@ -119,7 +117,7 @@ jobs:
           grep "version" pyproject.toml
 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v4
         with:
           base: master
           branch: version-bump-${{ needs.details.outputs.new_version }}
