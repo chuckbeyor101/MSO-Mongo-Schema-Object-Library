@@ -109,6 +109,7 @@ jobs:
           git push origin version-bump-${{ needs.details.outputs.new_version }}
           git status
           grep "version" pyproject.toml
+          git checkout master
 
       - name: Check branch info and version in pyproject.toml
         run: |
