@@ -105,7 +105,6 @@ jobs:
           git add pyproject.toml
           git commit -m "Bump version to $VERSION"
           git push origin version-bump-${{ needs.details.outputs.new_version }}
-          git checkout master
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v7
