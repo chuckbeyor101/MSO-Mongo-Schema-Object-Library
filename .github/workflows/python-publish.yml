@@ -142,11 +142,6 @@ jobs:
 
     steps:
       - name: Check branch info and version in pyproject.toml
-        run: |
-          git status
-          git rev-parse HEAD
-          grep "version" pyproject.toml
-
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
