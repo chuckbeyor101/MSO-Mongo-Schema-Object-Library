@@ -119,7 +119,6 @@ jobs:
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v4
         with:
-          base: master
           branch: version-bump-${{ needs.details.outputs.new_version }}
           title: "Bump version to ${{ needs.details.outputs.new_version }}"
           body: "This PR bumps the version to ${{ needs.details.outputs.new_version }}."
