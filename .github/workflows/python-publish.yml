@@ -96,20 +96,25 @@ jobs:
 
       - name: Set project version with Poetry
         run: |
-          git status 
-          cat pyproject.toml
           poetry version ${{ needs.details.outputs.new_version }}
 
       - name: Bump version in pyproject.toml
         run: |
-          git status 
-          cat pyproject.toml
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           git checkout -b version-bump-${{ needs.details.outputs.new_version }}
+          
+          git status 
+          cat pyproject.toml
+          
           git add pyproject.toml
+          
+          git status 
+          cat pyproject.toml
+          
           git commit -m "Bump version to $VERSION"
           git push origin version-bump-${{ needs.details.outputs.new_version }}
+          
           git status 
           cat pyproject.toml
 
