@@ -141,7 +141,6 @@ jobs:
       contents: read
 
     steps:
-      - name: Check branch info and version in pyproject.toml
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
