@@ -112,6 +112,12 @@ jobs:
           git status
           grep "version" pyproject.toml
 
+      - name: Check branch info and version in pyproject.toml
+        run: |
+          git status
+          git rev-parse HEAD
+          grep "version" pyproject.toml
+
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v7
         with:
