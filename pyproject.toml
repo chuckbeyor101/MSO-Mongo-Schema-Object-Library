@@ -1,7 +1,5 @@
 [project]
 name = "MSO"
-version = "1.0.0"
-dynamic = [ "readme" ]
 
 [build-system]
 requires = ["poetry-core"]
@@ -9,6 +7,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "MSO"
+version = "1.0.0"
 description = "MongoDB Schema Object - A ODM from Mongo DB JSON validation schema"
 readme = "README.md"
 authors = ["Charles Beyor"]

@@ -96,16 +96,22 @@ jobs:
 
       - name: Set project version with Poetry
         run: |
+          git status 
+          cat pyproject.toml
           poetry version ${{ needs.details.outputs.new_version }}
 
       - name: Bump version in pyproject.toml
         run: |
+          git status 
+          cat pyproject.toml
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           git checkout -b version-bump-${{ needs.details.outputs.new_version }}
           git add pyproject.toml
           git commit -m "Bump version to $VERSION"
           git push origin version-bump-${{ needs.details.outputs.new_version }}
+          git status 
+          cat pyproject.toml
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v7
@@ -150,58 +156,3 @@ jobs:
 
       - name: Publish distribution to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
-
-      # Alternatively, use this one
-      # - name: Mint token
-      #   id: mint
-      #   uses: tschm/token-mint-action@v1.0.3
-
-      #  Requires poetry to be installed
-      # - name: Install Poetry
-      #   uses: snok/install-poetry@v1
-
-      # - name: Publish the package with poetry
-      #   run: |
-      #     poetry publish -u __token__ -p '${{ steps.mint.outputs.api-token }}'
-
-#  bump-version:
-#    needs: [details, pypi_publish]
-#    runs-on: ubuntu-latest
-#    steps:
-#      - name: Checkout Code
-#        uses: actions/checkout@v3
-#        with:
-#          fetch-depth: 0 # Fetch full history to avoid issues with tags and branches
-#
-#      - name: Set up Python
-#        uses: actions/setup-python@v4
-#        with:
-#          python-version: "3.12"
-#
-#      - name: Install Poetry
-#        run: |
-#          curl -sSL https://install.python-poetry.org | python3 -
-#          export PATH="$HOME/.local/bin:$PATH"
-#
-#      - name: Install dependencies
-#        run: poetry install
-#
-#      - name: Bump version
-#        run: |
-#          VERSION="${{ needs.details.outputs.new_version }}"
-#          poetry version $VERSION
-#          git config user.name "GitHub Actions"
-#          git config user.email "actions@github.com"
-#          git checkout -b version-bump-${{ needs.details.outputs.new_version }}
-#          git add pyproject.toml
-#          git commit -m "Bump version to $VERSION"
-#          git push origin version-bump-${{ needs.details.outputs.new_version }}
-#
-#      - name: Create Pull Request
-#        uses: peter-evans/create-pull-request@v7
-#        with:
-#          branch: version-bump-${{ needs.details.outputs.new_version }}
-#          title: "Bump version to ${{ needs.details.outputs.new_version }}"
-#          body: "This PR bumps the version to ${{ needs.details.outputs.new_version }}."
-#          labels: "version-bump"
-#          base: master
