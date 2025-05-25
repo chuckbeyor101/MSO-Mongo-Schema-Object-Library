@@ -98,17 +98,19 @@ jobs:
 
       - name: Bump version in pyproject.toml
         run: |
+          grep "version" pyproject.toml
           poetry version ${{ needs.details.outputs.new_version }}
+          grep "version" pyproject.toml
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           git checkout -b version-bump-${{ needs.details.outputs.new_version }}
           git add pyproject.toml
-          git commit -m "Bump version to $VERSION"
-          git status 
-          cat pyproject.toml
+          git commit -m "Bump version to $NEW_VERSION"
+          git status
+          grep "version" pyproject.toml
           git push origin version-bump-${{ needs.details.outputs.new_version }}
-          git status 
-          cat pyproject.toml
+          git status
+          grep "version" pyproject.toml
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v7
