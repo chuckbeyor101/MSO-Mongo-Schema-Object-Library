@@ -163,3 +163,4 @@ jobs:
           type: now
           target_branch: master
           message: Bump version to ${{ needs.details.outputs.new_version }}
+          github_token: ${{ secrets.GH_TOKEN }}
