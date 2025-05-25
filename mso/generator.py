@@ -12,9 +12,9 @@
 #  Gitlab: https://github.com/chuckbeyor101/MSO-Mongo-Schema-Object-Library                                            #
 # ######################################################################################################################
 
-from MSO.base_model import MongoModel
-from MSO.schema_loader import load_schema
-from MSO.mongo_helpers import MongoHelpersMixin
+from mso.base_model import MongoModel
+from mso.schema_loader import load_schema
+from mso.mongo_helpers import MongoHelpersMixin
 from typing import Optional, Any
 
 def normalize_bson_type(bson_type):

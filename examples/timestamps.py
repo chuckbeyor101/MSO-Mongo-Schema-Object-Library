@@ -15,7 +15,7 @@
 import os
 from time import sleep
 from pymongo import MongoClient
-from MSO.generator import get_model
+from mso.generator import get_model
 
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 MONGO_DB = os.getenv("MONGO_DB", "mydb")

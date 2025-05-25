@@ -14,7 +14,7 @@
 
 import os
 from pymongo import MongoClient
-from MSO.generator import get_model
+from mso.generator import get_model
 from pprint import pprint
 
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")

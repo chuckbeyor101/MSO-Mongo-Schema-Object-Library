@@ -14,8 +14,8 @@
 
 import os
 from pymongo import MongoClient
-from MSO.generator import get_model
-from MSO.base_model import MongoModel, pre_save, post_save
+from mso.generator import get_model
+from mso.base_model import MongoModel, pre_save, post_save
 
 # Connect to MongoDB
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")

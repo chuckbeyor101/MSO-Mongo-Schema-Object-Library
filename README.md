@@ -61,7 +61,7 @@ In this basic example we have already created a $jsonSchema validator for the "P
 
 ```python
 from pymongo import MongoClient
-from MSO.generator import get_model
+from mso.generator import get_model
 
 # Connect to MongoDB
 client = MongoClient("mongodb://localhost:27017")
@@ -146,10 +146,11 @@ MSO includes a powerful .summarize() method to help you quickly explore and unde
 **top**: Number of top strings to return (default: 5)
 
 ### 🔍 Example
+
 ```python
 import os
 from pymongo import MongoClient
-from MSO.generator import get_model
+from mso.generator import get_model
 
 # Connect to MongoDB
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
@@ -222,8 +223,9 @@ MSO makes it easy to compare two MongoDB documents—either as model instances o
 - Filtering for specific fields or changes
 
 ### Basic Example
+
 ```python
-from MSO.generator import get_model
+from mso.generator import get_model
 from pymongo import MongoClient
 
 client = MongoClient("mongodb://localhost:27017")
@@ -243,6 +245,7 @@ person2 = {
 diff = People.diff(person1, person2, strict=True)
 
 from pprint import pprint
+
 pprint(diff)
 ```
 ### Example Output
@@ -278,7 +281,7 @@ Timestamps are enabled by default. To disable them, set the `timestamps` paramet
 import os
 from time import sleep
 from pymongo import MongoClient
-from MSO.generator import get_model
+from mso.generator import get_model
 
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 MONGO_DB = os.getenv("MONGO_DB", "mydb")
@@ -299,20 +302,22 @@ People.timestamps_enabled = False
 # 🧩 Lifecycle Hooks
 You can use decorators like @pre_save, @post_save, @pre_delete, and @post_delete to hook into model lifecycle events. This is useful for setting defaults, cleaning up, triggering logs, or validating conditions.
 ### Example: Automatically output a message when a document is saved
+
 ```python
-from MSO.base_model import MongoModel, pre_save, post_save
+from mso.base_model import MongoModel, pre_save, post_save
 from pymongo import MongoClient
 
 client = MongoClient("mongodb://localhost:27017")
 db = client["mydb"]
 
+
 # Define the model hooks you would like to use
 class People(MongoModel):
-    @post_save # This method will be called after the document is saved
+    @post_save  # This method will be called after the document is saved
     def confirm_save(self):
         print(f"[+] Document saved: {self.name}")
 
-        
+
 People = get_model(db, "people")
 
 person = People(name="Jane Doe")
@@ -332,7 +337,10 @@ distributed under the License is distributed on an **"AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND**, either express or implied.
 
 See the License for the specific language governing permissions and limitations under the License.                                                                           
-                                                                                                              
+                                                                     
+PyPi: https://pypi.org/project/MSO/           
+Reddit: https://www.reddit.com/r/MSO_Mongo_Python_ORM/
 Gitlab: https://github.com/chuckbeyor101/MSO-Mongo-Schema-Object-Library.git   
+
 
 # 
