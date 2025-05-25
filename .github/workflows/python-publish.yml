@@ -104,7 +104,11 @@ jobs:
           git checkout -b version-bump-${{ needs.details.outputs.new_version }}
           git add pyproject.toml
           git commit -m "Bump version to $VERSION"
+          git status 
+          cat pyproject.toml
           git push origin version-bump-${{ needs.details.outputs.new_version }}
+          git status 
+          cat pyproject.toml
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v7
@@ -117,8 +121,6 @@ jobs:
 
       - name: Install dependencies
         run: | 
-          git status 
-          cat pyproject.toml
           poetry install --sync --no-interaction
 
       - name: Build source and wheel distribution
