@@ -128,6 +128,15 @@ jobs:
           name: dist
           path: dist/
 
+      - uses: actions/checkout@master
+      - name: Merge version-bump-${{ needs.details.outputs.new_version }} -> master
+        uses: devmasx/merge-branch@master
+        with:
+          type: now
+          target_branch: master
+          message: Merge Into Master - Bump version to ${{ needs.details.outputs.new_version }}
+          github_token: ${{ secrets.GH_TOKEN }}
+
   pypi_publish:
     name: Upload release to PyPI
     needs: [setup_and_build, details]
@@ -149,18 +158,3 @@ jobs:
 
       - name: Publish distribution to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
-
-  merge-branch:
-    name: Merge Changes To Master Branch
-    runs-on: ubuntu-latest
-    needs: [setup_and_build, details, pypi_publish]
-    steps:
-      - uses: actions/checkout@master
-
-      - name: Merge version-bump-${{ needs.details.outputs.new_version }} -> master
-        uses: devmasx/merge-branch@master
-        with:
-          type: now
-          target_branch: master
-          message: Bump version to ${{ needs.details.outputs.new_version }}
-          github_token: ${{ secrets.GH_TOKEN }}
