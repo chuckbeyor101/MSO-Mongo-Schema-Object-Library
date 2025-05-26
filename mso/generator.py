@@ -82,18 +82,45 @@ def generate_nested_class(name, schema, class_map):
     return new_class
 
 def create_readonly_model(collection_name, db):
+    def wrap(value):
+        if isinstance(value, dict):
+            return ReadOnlyDocument(value)
+        elif isinstance(value, list):
+            return [wrap(v) for v in value]
+        else:
+            return value
+
     class ReadOnlyDocument:
         def __init__(self, data):
-            self._data = data
+            self._data = {k: wrap(v) for k, v in data.items()}
 
         def __getattr__(self, item):
-            return self._data.get(item)
+            try:
+                return self._data[item]
+            except KeyError:
+                raise AttributeError(f"No such attribute: {item}")
 
         def __getitem__(self, item):
             return self._data[item]
 
+        def __setattr__(self, key, value):
+            if key == "_data":
+                super().__setattr__(key, value)
+            else:
+                self._data[key] = wrap(value)
+
         def __repr__(self):
-            return repr(self._data)
+            return f"<ReadOnlyDocument {self._data}>"
+
+        def to_dict(self):
+            def unwrap(value):
+                if isinstance(value, ReadOnlyDocument):
+                    return {k: unwrap(v) for k, v in value._data.items()}
+                elif isinstance(value, list):
+                    return [unwrap(v) for v in value]
+                else:
+                    return value
+            return unwrap(self)
 
         def save(self):
             raise TypeError(f"Cannot save document from read-only view '{collection_name}'.")
@@ -109,8 +136,7 @@ def create_readonly_model(collection_name, db):
 
         @classmethod
         def find(cls, *args, **kwargs):
-            for doc in cls._collection.find(*args, **kwargs):
-                yield ReadOnlyDocument(doc)
+            return (ReadOnlyDocument(doc) for doc in cls._collection.find(*args, **kwargs))
 
         @classmethod
         def find_one(cls, *args, **kwargs):
@@ -118,8 +144,12 @@ def create_readonly_model(collection_name, db):
             return ReadOnlyDocument(doc) if doc else None
 
         @classmethod
-        def aggregate(cls, *args, **kwargs):
-            return cls._collection.aggregate(*args, **kwargs)
+        def find_many(cls, *args, **kwargs):
+            return list(cls.find(*args, **kwargs))
+
+        @classmethod
+        def aggregate(cls, pipeline, *args, **kwargs):
+            return (ReadOnlyDocument(doc) for doc in cls._collection.aggregate(pipeline, *args, **kwargs))
 
         @classmethod
         def count_documents(cls, *args, **kwargs):
@@ -129,11 +159,16 @@ def create_readonly_model(collection_name, db):
         def get(cls, _id):
             return cls.find_one({"_id": _id})
 
+        @classmethod
+        def all(cls, *args, **kwargs):
+            return list(cls.find(*args, **kwargs))
+
         def __init__(self, *args, **kwargs):
             raise TypeError(f"'{collection_name}' is a view and cannot be instantiated.")
 
     ReadOnlyModel.__name__ = normalize_class_name(collection_name)
     return ReadOnlyModel
+
 
 
 def get_model(db, collection_name):
