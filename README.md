@@ -23,9 +23,8 @@
 ---
 
 ## 🔧 Installation
-
 ```bash
-pip install --upgrade git+https://github.com/chuckbeyor101/MSO-Mongo-Schema-Object-Library.git
+pip install mso
 ```
 
 # Recommended MongoDB Validation Schema Format

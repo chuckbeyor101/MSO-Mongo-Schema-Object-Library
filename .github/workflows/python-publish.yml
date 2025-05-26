@@ -100,10 +100,10 @@ jobs:
           poetry version ${{ needs.details.outputs.new_version }}
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          git checkout -b version-bump-${{ needs.details.outputs.new_version }}
+          git checkout -b version-${{ needs.details.outputs.new_version }}
           git add pyproject.toml
           git commit -m "Bump version to ${{ needs.details.outputs.new_version }}"
-          git push origin version-bump-${{ needs.details.outputs.new_version }}
+          git push origin version-${{ needs.details.outputs.new_version }}
 
       - name: Install dependencies
         run: | 
@@ -120,11 +120,11 @@ jobs:
           path: dist/
 
       - uses: actions/checkout@master
-      - name: Merge version-bump-${{ needs.details.outputs.new_version }} -> master
+      - name: Merge version-${{ needs.details.outputs.new_version }} -> master
         uses: devmasx/merge-branch@master
         with:
           type: now
-          from_branch: version-bump-${{ needs.details.outputs.new_version }}
+          from_branch: version-${{ needs.details.outputs.new_version }}
           target_branch: master
           message: Merge Into Master - Bump version to ${{ needs.details.outputs.new_version }}
           github_token: ${{ secrets.GH_TOKEN }}
