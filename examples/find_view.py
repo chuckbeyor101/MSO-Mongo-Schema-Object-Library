@@ -24,20 +24,31 @@ db = client[MONGO_DB]
 # Get the model for the collection
 PeopleSummaryView = get_model(db, "people_summary_view")
 
-# Get document count
-count = PeopleSummaryView.count_documents({})
-print(f"Total documents in 'people_summary_view': {count}")
+# Querying documents
+person = PeopleSummaryView.find_one({"name": "Tony Pajama Sr"})
 
 # Querying documents
-person = PeopleSummaryView.find_one({"name": "Tony Pajama"})
+people = PeopleSummaryView.find_many({"name": "Tony Pajama Sr"})
 
 # Manipulate values locally
 person.name = "Tony Pajama Updated"
+
+# Print the updated person object
+print(f"Updated Person: {person.name}, Age: {person.age}")
+# Print Nested Field
+print(f"Nested Field - Primary Physician: {person.health.primary_physician.name}")
 
 # This should fail since the view is read-only
 try:
     person.save()
 except Exception as e:
     print(f"Error saving person: {e}")
+
+for p in people:
+    print(f"Person: {p.name}, Age: {p.age}")
+    print(f"Nested Field - Primary Physician: {p.health.primary_physician.name}")
+    # for each address in p.addresses
+    for address in p.addresses:
+        print(f"Address: {address.street}")
 
 pass
