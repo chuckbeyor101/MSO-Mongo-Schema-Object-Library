@@ -126,7 +126,7 @@ jobs:
           type: now
           from_branch: version-${{ needs.details.outputs.new_version }}
           target_branch: master
-          message: Merge Into Master - Bump version to ${{ needs.details.outputs.new_version }}
+          message: Merge Into Master - Release version ${{ needs.details.outputs.new_version }}
           github_token: ${{ secrets.GH_TOKEN }}
 
   pypi_publish:
