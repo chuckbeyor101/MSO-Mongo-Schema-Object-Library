@@ -220,11 +220,13 @@ def add_api_routes(app, name: str, Model, auth_func=None, debug=False, read_only
 
         docs = Model.find_many(filter=filter, sort=sort, limit=limit, skip=skip)
         total = Model.count_documents(filter=filter)
+        total_pages = max((total + limit - 1) // limit, 1)
 
         return {
             "total": total,
             "page": page,
             "limit": limit,
+            "total_pages": total_pages,
             "results": [doc.to_dict(output_json=True) if doc else None for doc in docs]
         }
 
