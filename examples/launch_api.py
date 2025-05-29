@@ -31,4 +31,4 @@ MONGO_DB = os.getenv("MONGO_DB", "mydb")
 client = MongoClient(MONGO_URI)
 db = client[MONGO_DB]
 
-start_api(db, debug=True, auth_func=authenticate)
+start_api(db, debug=False, auth_func=authenticate)

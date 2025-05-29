@@ -302,15 +302,34 @@ def add_api_routes(app, name: str, Model, auth_func=None, debug=False, read_only
         @router.delete("/bulk-delete", status_code=200, summary=f"Bulk Delete Documents from {name} by ID List")
         def bulk_delete_by_ids(ids: List[str] = Body(..., embed=True, description="List of document IDs to delete")):
             """
-            Deletes all documents that match the given list of ObjectId strings.
+            Deletes documents by a list of ObjectId strings. Returns only successfully deleted IDs.
             """
             try:
-                object_ids = [parse_objectid(id) for id in ids]
+                object_ids = []
+                id_map = {}
+
+                # Validate and convert
+                for id_str in ids:
+                    try:
+                        oid = parse_objectid(id_str)
+                        object_ids.append(oid)
+                        id_map[str(oid)] = id_str  # map for tracking input format
+                    except HTTPException:
+                        continue  # Skip invalid ObjectIds
+
+                # Fetch only existing IDs
+                existing_docs = Model.find_many({"_id": {"$in": object_ids}})
+                existing_ids = [str(doc._id) for doc in existing_docs]
+
+                # Perform delete
                 result = Model.delete_many({"_id": {"$in": object_ids}})
+
                 return {
                     "deleted_count": result.deleted_count,
-                    "deleted_ids": ids
+                    "deleted_ids": [id_map[_id] for _id in existing_ids],
+                    "not_found_ids": [id for id in ids if id not in id_map or id_map[id] not in existing_ids]
                 }
+
             except Exception as e:
                 raise HTTPException(status_code=400, detail=format_validation_error(e, debug))
 
