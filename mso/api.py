@@ -362,6 +362,40 @@ def start_api(
     limit_max=1000,
     **uvicorn_kwargs
 ):
+    """
+        Starts a FastAPI server with auto-generated REST API routes for MongoDB collections.
+
+        Args:
+            db (Database): A PyMongo `Database` object to introspect and serve.
+            collections (list, optional): Specific collections to expose. Use ["*"] or None for all collections.
+            exclude_collections (list): Collections to exclude from the API.
+            host (str): Hostname or IP address for the server to bind to.
+            port (int): Port number to listen on.
+            title (str): API documentation title.
+            description (str): API description.
+            version (str): API version.
+            docs_url (str): URL path for Swagger UI documentation.
+            redoc_url (str): URL path for ReDoc documentation.
+            openapi_url (str): URL path for OpenAPI schema.
+            enable_cors (bool): Whether to enable CORS middleware.
+            cors_origins (list): List of allowed origins for CORS.
+            cors_methods (list): List of allowed methods for CORS.
+            cors_headers (list): List of allowed headers for CORS.
+            cors_credentials (bool): Whether to allow credentials in CORS.
+            auth_func (callable, optional): Optional async function to use as authentication dependency.
+            debug (bool): Enables debug logging and error traces.
+            exclude_system_collections (bool): Whether to exclude MongoDB system collections.
+            pretty_tags (bool): Whether to use prettified tags in the OpenAPI docs.
+            limit_default (int): Default page size for paginated routes.
+            limit_max (int): Maximum page size for paginated routes.
+            **uvicorn_kwargs: Additional keyword arguments passed to `uvicorn.run()`.
+
+        Behavior:
+            - For each collection, generates RESTful CRUD endpoints based on schema inferred using `get_model`.
+            - Supports views as read-only endpoints.
+            - Automatically includes pagination, sorting, and filtering.
+            - Supports CORS and optional route-level authentication.
+        """
 
 
 
