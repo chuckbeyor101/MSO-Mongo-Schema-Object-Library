@@ -177,6 +177,15 @@ def add_api_routes(app, name: str, Model, auth_func=None, debug=False, read_only
         except Exception as e:
             raise HTTPException(status_code=400, detail=format_validation_error(e, debug))
 
+    @router.post("/count", status_code=200, summary=f"Count Documents in {name}")
+    def count_docs(params: QueryRequest = Body(default=None)):
+        try:
+            filter = sanitize_filter(params.filter) if params else {}
+            count = Model.count_documents(filter)
+            return {"count": count}
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=format_validation_error(e, debug))
+
     @router.post("/query", status_code=200, summary=f"Query Documents in {name}",)
     def query_docs(
             params: QueryRequest = Body(default=None),
@@ -214,6 +223,18 @@ def add_api_routes(app, name: str, Model, auth_func=None, debug=False, read_only
                 doc = Model.from_dict(payload)
                 doc.save()
                 return {"inserted_id": str(doc._id)}
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=format_validation_error(e, debug))
+
+        @router.post("/bulk-insert", status_code=201, summary=f"Bulk Insert Documents into {name}")
+        def bulk_insert(docs: List[dict] = Body(...)):
+            try:
+                inserted_ids = []
+                for doc_data in docs:
+                    doc = Model.from_dict(doc_data)
+                    doc.save()
+                    inserted_ids.append(str(doc._id))
+                return {"inserted_ids": inserted_ids}
             except Exception as e:
                 raise HTTPException(status_code=400, detail=format_validation_error(e, debug))
 
@@ -259,7 +280,6 @@ def add_api_routes(app, name: str, Model, auth_func=None, debug=False, read_only
 
             except Exception as e:
                 raise HTTPException(status_code=400, detail=format_validation_error(e, debug))
-
 
     app.include_router(router, prefix=f"/{name}", tags=[name])
 
