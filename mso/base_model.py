@@ -16,8 +16,6 @@ from datetime import datetime
 from bson import ObjectId
 from decimal import Decimal
 from typing import Any, List, Dict
-import json
-from collections import Counter, defaultdict
 
 # ----------------------------------------------------------------------------------
 # BSON Type Mapping (used to validate types from MongoDB schema)
@@ -519,8 +517,20 @@ class MongoModel:
             instance._data[key] = value
         return instance
 
-    def to_dict(self):
-        return self._serialize_data()
+    def to_dict(self, output_json=False) -> dict:
+        model_dict = self._serialize_data()
+
+        if output_json:
+            # Convert to JSON string by converting objectids and dates to strings
+            for key, value in model_dict.items():
+                if isinstance(value, ObjectId):
+                    model_dict[key] = str(value)
+                elif isinstance(value, datetime):
+                    model_dict[key] = value.isoformat()
+                elif isinstance(value, Decimal):
+                    model_dict[key] = float(value)
+
+        return model_dict
 
     def _serialize_data(self):
         result = {}
@@ -723,7 +733,7 @@ class MongoModel:
         return None
 
     @classmethod
-    def find_many(cls, filter: dict = None, sort=None, limit=0) -> List[Any]:
+    def find_many(cls, filter: dict = None, sort=None, limit=0, skip=0) -> List[Any]:
         """
         Find and return a list of documents matching the given filter.
 
@@ -740,6 +750,8 @@ class MongoModel:
             cursor = cursor.sort(sort)
         if limit:
             cursor = cursor.limit(limit)
+        if skip:
+            cursor = cursor.skip(skip)
         return [cls.from_dict(doc) for doc in cursor]
 
     @classmethod

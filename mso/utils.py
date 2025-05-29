@@ -11,6 +11,9 @@
 #                                                                                                                      #
 #  Gitlab: https://github.com/chuckbeyor101/MSO-Mongo-Schema-Object-Library                                            #
 # ######################################################################################################################
+from typing import Any
+from mso import base_model
+from pymongo.database import Database
 
 def parse_schema(schema, name='Root'):
     classes = {}
@@ -22,3 +25,15 @@ def parse_schema(schema, name='Root'):
             classes.update(nested_classes)
     classes[name] = schema
     return classes
+
+
+def infer_python_type_from_bson(bson_type):
+    if isinstance(bson_type, list):
+        for t in bson_type:
+            if t != "null":
+                return base_model.BSON_TYPE_MAP.get(t, Any)
+        return Any
+    return base_model.BSON_TYPE_MAP.get(bson_type, Any)
+
+def is_view(db: Database, collection_name: str) -> bool:
+    return db["system.views"].find_one({"_id": f"{db.name}.{collection_name}"}) is not None

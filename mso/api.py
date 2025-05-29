@@ -12,31 +12,32 @@
 #  Gitlab: https://github.com/chuckbeyor101/MSO-Mongo-Schema-Object-Library                                            #
 # ######################################################################################################################
 
-from fastapi import FastAPI, APIRouter, HTTPException, Request, Query, Depends, status
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Query, Depends, status, Body
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field, create_model
-from typing import Optional, Any, Dict, List, Union, Callable
+from typing import Optional, Any, Dict, List, Union, Callable, Annotated, Tuple
 from pymongo.database import Database
-from bson import ObjectId
+from mso import utils
+from mso.generator import get_model
 import uvicorn
 import traceback
 import re
+from datetime import datetime
+from typing import Any, Union, Mapping
+from dateutil.parser import parse as parse_datetime
 
-# Swagger-friendly request models
-class QueryParams(BaseModel):
-    filter: Dict[str, Any] = Field(default_factory=dict, description="MongoDB filter query")
-    projection: Optional[Dict[str, int]] = Field(default=None, description="Fields to include/exclude")
-    sort: Optional[List[List[Union[str, int]]]] = Field(default=None, description='List of sort pairs: [["field", 1]]')
-    page: Optional[int] = Field(default=1, ge=1)
-    limit: Optional[int] = Field(default=20, ge=1)
-
-
-class AggregateParams(BaseModel):
-    pipeline: List[Dict[str, Any]] = Field(..., description="MongoDB aggregation pipeline")
-
-
-class DistinctParams(BaseModel):
-    field: str = Field(..., description="Field name to get distinct values for")
+class QueryRequest(BaseModel):
+    filter: Optional[Dict[str, Any]] = Field(
+        default_factory=dict,
+        description="Filter criteria as a JSON object. Example: {'age': {'$gt': 30}}",
+        examples=[{"last_modified": {"$gte": "2024-01-01T00:00:00Z"}}]
+    )
+    sort: Optional[List[List[Union[str, int]]]] = Field(
+        default=None,
+        description='Sort order as a list of lists. Example: [["age", -1], ["name", 1]]',
+        examples=[[["last_modified", "asc"]]]
+    )
 
 
 def format_validation_error(e: Exception, debug: bool = False):
@@ -58,134 +59,115 @@ def get_auth_dependency(auth_func: Callable[[Request], None]):
             await auth_func(request)
     return Depends(dependency)
 
+def convert_dates_in_filter(obj: Union[dict, list]) -> Any:
+    """
+    Recursively convert ISO date strings in MongoDB-style filters into datetime objects.
+    """
+    if isinstance(obj, dict):
+        return {
+            key: convert_dates_in_filter(value)
+            for key, value in obj.items()
+        }
+    elif isinstance(obj, list):
+        return [convert_dates_in_filter(item) for item in obj]
+    elif isinstance(obj, str):
+        try:
+            # Only convert if string is ISO-like
+            if "T" in obj and obj.endswith("Z"):
+                return parse_datetime(obj)
+        except Exception:
+            return obj  # return original if not a date
+    return obj
 
-def is_view(db: Database, collection_name: str) -> bool:
-    return db["system.views"].find_one({"_id": f"{db.name}.{collection_name}"}) is not None
+
+def sanitize_filter(filter: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Validates and sanitizes filter input for MongoDB.
+    Converts ISO date strings to datetime objects.
+    Raises HTTPException on invalid input.
+    """
+    if not filter:
+        return {}
+
+    if not isinstance(filter, dict):
+        raise HTTPException(
+            status_code=400,
+            detail="Filter must be a JSON object"
+        )
+
+    sanitized_filter = convert_dates_in_filter(filter)
+
+    # Additional validation can be added here if needed
+
+    return sanitized_filter
+
+def sanitize_sort(sort: Union[List[List[Union[str, int]]], None]) -> List[Tuple[str, int]]:
+    """
+    Validates and sanitizes sort input for MongoDB.
+    Converts input to a list of (field, direction) tuples.
+    Raises HTTPException on invalid input.
+    """
+    if not sort:
+        return []
+
+    valid_sort = []
+    for item in sort:
+        if isinstance(item, list) and len(item) == 2:
+            field, direction = item
+
+            if isinstance(direction, str):
+                direction = direction.lower()
+                if direction == "asc":
+                    direction = 1
+                elif direction == "desc":
+                    direction = -1
+                else:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Invalid sort string for field '{field}': use 'asc' or 'desc'"
+                    )
+
+            if isinstance(direction, int) and direction in (1, -1):
+                valid_sort.append((field, direction))
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid sort direction for field '{field}': must be 1, -1, 'asc', or 'desc'"
+                )
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Each sort item must be a list of [field, direction]"
+            )
+    return valid_sort
 
 
-def build_request_model(model_cls):
-    schema = getattr(model_cls, "__mso_schema__", {}).get("properties", {})
-    fields = {}
-    for key, spec in schema.items():
-        field_type = Any
-        description = spec.get("description", "")
-        example = spec.get("examples", [None])[0] or spec.get("default", None)
-        fields[key] = (field_type, Field(..., description=description, example=example))
-    return create_model(f"{model_cls.__name__}Request", **fields)
-
-
-def add_api_routes(app, name: str, Model, auth_func=None, debug=False, read_only=False):
-    router = APIRouter()
+def add_api_routes(app, name: str, Model, auth_func=None, debug=False, read_only=False, limit_default=20, limit_max=1000):
     auth_dep = get_auth_dependency(auth_func) if auth_func else None
-    RequestModel = build_request_model(Model)
+    router = APIRouter(dependencies=[auth_dep] if auth_dep else [])
 
-    @router.get("/", status_code=200)
-    def list_docs(
-        page: int = Query(1, ge=1, description="Page number"),
-        limit: int = Query(20, ge=1, le=100, description="Documents per page"),
-        sort: Optional[str] = Query(None, description='Sort as JSON string, e.g. [["age", -1]]')
-    ):
-        skip = (page - 1) * limit
-        cursor = Model.find({})
-        if sort:
-            import json
-            sort_criteria = json.loads(sort)
-            cursor = cursor.sort(sort_criteria)
-        total = Model.count({})
-        docs = cursor.skip(skip).limit(limit)
-        return {
-            "total": total,
-            "page": page,
-            "limit": limit,
-            "results": [doc.to_dict() for doc in docs]
-        }
-
-    @router.get("/{id}", status_code=200)
-    def get_doc(id: str):
-        doc = Model.get(ObjectId(id))
-        if not doc:
-            raise HTTPException(status_code=404, detail="Document not found")
-        return doc.to_dict()
-
-    if not read_only:
-        @router.post("/", status_code=201, dependencies=[auth_dep] if auth_dep else [])
-        def create_doc(data: RequestModel):
-            try:
-                doc = Model.from_dict(data.dict())
-                doc.save()
-                return doc.to_dict()
-            except Exception as e:
-                detail = format_validation_error(e, debug)
-                raise HTTPException(status_code=422, detail=detail)
-
-        @router.put("/{id}", status_code=200, dependencies=[auth_dep] if auth_dep else [])
-        def replace_doc(id: str, data: RequestModel):
-            try:
-                doc = Model.from_dict(data.dict())
-                doc._id = ObjectId(id)
-                doc.save()
-                return doc.to_dict()
-            except Exception as e:
-                detail = format_validation_error(e, debug)
-                raise HTTPException(status_code=422, detail=detail)
-
-        @router.patch("/{id}", status_code=200, dependencies=[auth_dep] if auth_dep else [])
-        def update_doc(id: str, data: RequestModel):
-            doc = Model.get(ObjectId(id))
-            if not doc:
-                raise HTTPException(status_code=404, detail="Document not found")
-            try:
-                for k, v in data.dict().items():
-                    setattr(doc, k, v)
-                doc.save()
-                return doc.to_dict()
-            except Exception as e:
-                detail = format_validation_error(e, debug)
-                raise HTTPException(status_code=422, detail=detail)
-
-        @router.delete("/{id}", status_code=200, dependencies=[auth_dep] if auth_dep else [])
-        def delete_doc(id: str):
-            doc = Model.get(ObjectId(id))
-            if not doc:
-                raise HTTPException(status_code=404, detail="Document not found")
-            doc.delete()
-            return {"deleted": id}
-
+    # ---------------------------------------------- Read Only Routes ------------------------------------------------
     @router.post("/query", status_code=200)
-    def query_docs(params: QueryParams):
-        filter = params.filter
-        projection = params.projection
-        sort = params.sort
-        page = params.page
-        limit = params.limit
-        skip = (page - 1) * limit
+    def query_docs(
+            params: QueryRequest = Body(...),
+            page: int = Query(1, ge=1, description="Page number"),
+            limit: int = Query(limit_default, ge=1, le=limit_max, description="Documents per page"),
+    ):
 
-        cursor = Model.find(filter, projection=projection)
-        if sort:
-            cursor = cursor.sort(sort)
-        docs = cursor.skip(skip).limit(limit)
-        total = Model.count(filter)
+        skip = (page - 1) * limit
+        docs = Model.find_many(filter=sanitize_filter(params.filter), sort=sanitize_sort(params.sort), limit=limit, skip=skip)
+        total = len(docs)
 
         return {
             "total": total,
             "page": page,
             "limit": limit,
-            "results": [doc.to_dict() for doc in docs]
+            "results": [doc.to_dict(output_json=True) if doc else None for doc in docs]
         }
 
-    @router.post("/aggregate", status_code=200)
-    def run_aggregate(params: AggregateParams):
-        return list(Model._collection.aggregate(params.pipeline))
-
-    @router.post("/distinct", status_code=200)
-    def get_distinct(params: DistinctParams):
-        return Model._collection.distinct(params.field)
-
-    @router.get("/count", status_code=200)
-    def count_docs(filter: Optional[str] = "{}"):
-        import json
-        parsed_filter = json.loads(filter)
-        return {"count": Model.count(parsed_filter)}
+    #---------------------------------------------- Destructive Routes ------------------------------------------------
+    if not read_only:
+        pass
 
     app.include_router(router, prefix=f"/{name}", tags=[name])
 
@@ -210,9 +192,12 @@ def start_api(
     auth_func: callable = None,
     debug: bool = False,
     exclude_system_collections: bool = True,
+    limit_default=20,
+    limit_max=1000,
     **uvicorn_kwargs
 ):
-    from mso.generator import get_model
+
+
 
     app = FastAPI(
         title=title,
@@ -258,10 +243,10 @@ def start_api(
             print(f"Skipping collection '{name}': {e}")
             continue
 
-        if is_view(db, name):
+        if utils.is_view(db, name):
             print(f"Detected view: {name}. Registering read-only routes.")
-            add_api_routes(app, name, Model, auth_func=auth_func, debug=debug, read_only=True)
+            add_api_routes(app, name, Model, auth_func=auth_func, debug=debug, read_only=True, limit_default=limit_default, limit_max=limit_max)
         else:
-            add_api_routes(app, name, Model, auth_func=auth_func, debug=debug, read_only=False)
+            add_api_routes(app, name, Model, auth_func=auth_func, debug=debug, read_only=False, limit_default=limit_default, limit_max=limit_max)
 
     uvicorn.run(app, host=host, port=port, **uvicorn_kwargs)

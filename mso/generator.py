@@ -11,11 +11,13 @@
 #                                                                                                                      #
 #  Gitlab: https://github.com/chuckbeyor101/MSO-Mongo-Schema-Object-Library                                            #
 # ######################################################################################################################
-
+from datetime import datetime
 from mso.base_model import MongoModel
 from mso.schema_loader import load_schema
 from mso.mongo_helpers import MongoHelpersMixin
 from typing import Optional, Any
+from decimal import Decimal
+from bson import ObjectId
 
 def normalize_bson_type(bson_type):
     if isinstance(bson_type, list):
@@ -95,6 +97,19 @@ def create_readonly_model(collection_name, db):
         def __repr__(self):
             return repr(self._data)
 
+        def to_dict(self, output_json=False):
+            model_dict = self._data.copy()
+            if output_json:
+                # Convert ObjectId and datetime to string
+                for key, value in model_dict.items():
+                    if isinstance(value, ObjectId):
+                        model_dict[key] = str(value)
+                    elif isinstance(value, datetime):
+                        model_dict[key] = value.isoformat()
+                    elif isinstance(value, Decimal):
+                        model_dict[key] = float(value)
+            return model_dict
+
         def save(self):
             raise TypeError(f"Cannot save document from read-only view '{collection_name}'.")
 
@@ -116,6 +131,10 @@ def create_readonly_model(collection_name, db):
         def find_one(cls, *args, **kwargs):
             doc = cls._collection.find_one(*args, **kwargs)
             return ReadOnlyDocument(doc) if doc else None
+
+        @classmethod
+        def find_many(cls, *args, **kwargs):
+            return [ReadOnlyDocument(doc) for doc in cls._collection.find(*args, **kwargs)]
 
         @classmethod
         def aggregate(cls, *args, **kwargs):
