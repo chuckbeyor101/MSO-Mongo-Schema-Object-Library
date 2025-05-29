@@ -16,28 +16,9 @@ from datetime import datetime
 from bson import ObjectId
 from decimal import Decimal
 from typing import Any, List, Dict
-import json
-from collections import Counter, defaultdict
+from mso import config
 
-# ----------------------------------------------------------------------------------
-# BSON Type Mapping (used to validate types from MongoDB schema)
-# ----------------------------------------------------------------------------------
-BSON_TYPE_MAP = {
-    "string": str,
-    "int": int,
-    "bool": bool,
-    "double": float,
-    "float": float,
-    "date": datetime,
-    "objectId": ObjectId,
-    "binData": bytes,
-    "decimal": Decimal,
-    "long": int,
-    "timestamp": datetime,
-    "null": type(None),
-    "object": dict,
-    "array": list,
-}
+
 # ----------------------------------------------------------------------------------
 # ListFieldWrapper - A custom list wrapper for MongoDB array fields
 # ----------------------------------------------------------------------------------
@@ -304,9 +285,9 @@ class MongoModel:
         # MULTI-TYPE SUPPORT
         # ----------------------------
         if isinstance(bson_type, list):
-            expected_types = [BSON_TYPE_MAP.get(t, object) for t in bson_type if t in BSON_TYPE_MAP]
+            expected_types = [config.BSON_TYPE_MAP.get(t, object) for t in bson_type if t in config.BSON_TYPE_MAP]
         else:
-            expected_types = [BSON_TYPE_MAP.get(bson_type, object)]
+            expected_types = [config.BSON_TYPE_MAP.get(bson_type, object)]
 
         # ----------------------------
         # OBJECT VALIDATION
@@ -341,7 +322,7 @@ class MongoModel:
                     continue
 
                 # SCALAR VALIDATION
-                expected_item_type = BSON_TYPE_MAP.get(item_type, object)
+                expected_item_type = config.BSON_TYPE_MAP.get(item_type, object)
                 if not isinstance(item, expected_item_type):
                     # Attempt coercion since initial type check failed
                     value = self.coerce_type(item, [expected_item_type])
@@ -519,8 +500,20 @@ class MongoModel:
             instance._data[key] = value
         return instance
 
-    def to_dict(self):
-        return self._serialize_data()
+    def to_dict(self, output_json=False) -> dict:
+        model_dict = self._serialize_data()
+
+        if output_json:
+            # Convert to JSON string by converting objectids and dates to strings
+            for key, value in model_dict.items():
+                if isinstance(value, ObjectId):
+                    model_dict[key] = str(value)
+                elif isinstance(value, datetime):
+                    model_dict[key] = value.isoformat()
+                elif isinstance(value, Decimal):
+                    model_dict[key] = float(value)
+
+        return model_dict
 
     def _serialize_data(self):
         result = {}
@@ -723,7 +716,7 @@ class MongoModel:
         return None
 
     @classmethod
-    def find_many(cls, filter: dict = None, sort=None, limit=0) -> List[Any]:
+    def find_many(cls, filter: dict = None, sort=None, limit=0, skip=0) -> List[Any]:
         """
         Find and return a list of documents matching the given filter.
 
@@ -740,6 +733,8 @@ class MongoModel:
             cursor = cursor.sort(sort)
         if limit:
             cursor = cursor.limit(limit)
+        if skip:
+            cursor = cursor.skip(skip)
         return [cls.from_dict(doc) for doc in cursor]
 
     @classmethod
