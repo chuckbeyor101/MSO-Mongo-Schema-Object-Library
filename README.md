@@ -8,6 +8,7 @@
 
 - **Dynamic Model Generation**: Automatically generates Python classes from your MongoDB collection’s `$jsonSchema`.
 - **Pythonic API**: Use common patterns like `save()`, `find_one()`, `update_one()`, etc.
+- **REST API with Swagger**: Automatically generates a REST API for your models with Swagger documentation.
 - **Deeply Nested Models**: Supports arbitrarily nested schemas, including arrays of objects.
 - **Auto-validation**: Ensures types, enums, and structure match your schema.
 - **Recursive Object Serialization**: Works out-of-the-box with nested documents and arrays.
@@ -325,6 +326,23 @@ person.save()
 # Output:
 # [+] Document saved: Jane Doe
 ```
+
+# 🧪 REST API with Swagger
+MSO can automatically generate a REST API for your models, complete with Swagger documentation. This allows you to easily expose your MongoDB collections as RESTful endpoints.
+```python
+from mso import api
+from pymongo import MongoClient
+from mso.generator import get_model
+
+# Connect to MongoDB
+client = MongoClient("mongodb://localhost:27017")
+db = client["mydb"]
+
+start_api(db)
+```
+
+This will start a REST API server with Swagger documentation at http://127.0.0.1:8000/docs
+
 # 🔗 Community & Links
 PyPi: https://pypi.org/project/MSO/
 
