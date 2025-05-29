@@ -150,8 +150,24 @@ def sanitize_sort(sort: Union[List[List[Union[str, int]]], None]) -> List[Tuple[
             )
     return valid_sort
 
+def pretty_tag(name: str, read_only: bool = False) -> str:
+    """
+    Generates a pretty tag for the API routes based on the collection name.
+    If the collection is read-only, appends ' (Read Only)' to the tag.
+    """
+    tag = name.replace("_", " ").title()  # Replace underscores with spaces
 
-def add_api_routes(app, name: str, Model, auth_func=None, debug=False, read_only=False, limit_default=20, limit_max=1000):
+    # if single word then capitalize the first letter
+    if len(tag.split()) == 1:
+        tag = tag.capitalize()
+
+    # if the collection is read-only, append ' (Read Only)'
+    if read_only:
+        tag += " (Read Only)"
+
+    return tag
+
+def add_api_routes(app, name: str, Model, auth_func=None, debug=False, read_only=False, limit_default=20, limit_max=1000, pretty_tags=True):
     auth_dep = get_auth_dependency(auth_func) if auth_func else None
     router = APIRouter(dependencies=[auth_dep] if auth_dep else [])
 
@@ -169,7 +185,7 @@ def add_api_routes(app, name: str, Model, auth_func=None, debug=False, read_only
         except Exception as e:
             raise HTTPException(status_code=400, detail=format_validation_error(e, debug))
 
-    @router.get("/distinct/{field}", summary=f"Get Distinct Values from {name}", tags=[name])
+    @router.get("/distinct/{field}", summary=f"Get Distinct Values from {name}")
     def distinct_field(field: str):
         try:
             values = Model.distinct(field)
@@ -281,7 +297,8 @@ def add_api_routes(app, name: str, Model, auth_func=None, debug=False, read_only
             except Exception as e:
                 raise HTTPException(status_code=400, detail=format_validation_error(e, debug))
 
-    app.include_router(router, prefix=f"/{name}", tags=[name])
+    tag = pretty_tag(name, read_only) if pretty_tags else name
+    app.include_router(router, prefix=f"/{name}", tags=[tag])
 
 
 def start_api(
@@ -304,6 +321,7 @@ def start_api(
     auth_func: callable = None,
     debug: bool = False,
     exclude_system_collections: bool = True,
+    pretty_tags: bool = True,
     limit_default=20,
     limit_max=1000,
     **uvicorn_kwargs
@@ -357,8 +375,8 @@ def start_api(
 
         if utils.is_view(db, name):
             print(f"Detected view: {name}. Registering read-only routes.")
-            add_api_routes(app, name, Model, auth_func=auth_func, debug=debug, read_only=True, limit_default=limit_default, limit_max=limit_max)
+            add_api_routes(app, name, Model, auth_func=auth_func, debug=debug, read_only=True, limit_default=limit_default, limit_max=limit_max, pretty_tags=pretty_tags)
         else:
-            add_api_routes(app, name, Model, auth_func=auth_func, debug=debug, read_only=False, limit_default=limit_default, limit_max=limit_max)
+            add_api_routes(app, name, Model, auth_func=auth_func, debug=debug, read_only=False, limit_default=limit_default, limit_max=limit_max, pretty_tags=pretty_tags)
 
     uvicorn.run(app, host=host, port=port, **uvicorn_kwargs)
