@@ -376,9 +376,10 @@ def start_api(
             continue
 
         if utils.is_view(db, name):
-            print(f"Detected view: {name}. Registering read-only routes.")
+            print(f"Registering read only routes for view: {name}") if debug else None
             add_api_routes(app, name, Model, auth_func=auth_func, debug=debug, read_only=True, limit_default=limit_default, limit_max=limit_max, pretty_tags=pretty_tags)
         else:
+            print(f"Registering routes for collection: {name}") if debug else None
             add_api_routes(app, name, Model, auth_func=auth_func, debug=debug, read_only=False, limit_default=limit_default, limit_max=limit_max, pretty_tags=pretty_tags)
 
     uvicorn.run(app, host=host, port=port, **uvicorn_kwargs)
