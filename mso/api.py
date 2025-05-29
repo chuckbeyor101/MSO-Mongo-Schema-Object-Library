@@ -147,16 +147,24 @@ def add_api_routes(app, name: str, Model, auth_func=None, debug=False, read_only
     router = APIRouter(dependencies=[auth_dep] if auth_dep else [])
 
     # ---------------------------------------------- Read Only Routes ------------------------------------------------
-    @router.post("/query", status_code=200)
+    @router.post("/query", status_code=200, summary=f"Query Documents in {name}",)
     def query_docs(
-            params: QueryRequest = Body(...),
+            params: QueryRequest = Body(default=None),
             page: int = Query(1, ge=1, description="Page number"),
             limit: int = Query(limit_default, ge=1, le=limit_max, description="Documents per page"),
     ):
 
+        if params is None:
+            filter = {}
+            sort = None
+        else:
+            filter = sanitize_filter(params.filter)
+            sort = sanitize_sort(params.sort)
+
         skip = (page - 1) * limit
-        docs = Model.find_many(filter=sanitize_filter(params.filter), sort=sanitize_sort(params.sort), limit=limit, skip=skip)
-        total = len(docs)
+
+        docs = Model.find_many(filter=filter, sort=sort, limit=limit, skip=skip)
+        total = Model.count_documents(filter=filter)
 
         return {
             "total": total,
@@ -165,7 +173,7 @@ def add_api_routes(app, name: str, Model, auth_func=None, debug=False, read_only
             "results": [doc.to_dict(output_json=True) if doc else None for doc in docs]
         }
 
-    #---------------------------------------------- Destructive Routes ------------------------------------------------
+    # ---------------------------------------------- Destructive Routes ------------------------------------------------
     if not read_only:
         pass
 
