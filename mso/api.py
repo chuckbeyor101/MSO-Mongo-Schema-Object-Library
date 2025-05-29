@@ -82,6 +82,13 @@ def convert_dates_in_filter(obj: Union[dict, list]) -> Any:
     return obj
 
 
+def parse_objectid(id: str) -> ObjectId:
+    try:
+        return ObjectId(id)
+    except InvalidId:
+        raise HTTPException(status_code=400, detail="Invalid document ID format")
+
+
 def sanitize_filter(filter: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     """
     Validates and sanitizes filter input for MongoDB.
@@ -149,6 +156,27 @@ def add_api_routes(app, name: str, Model, auth_func=None, debug=False, read_only
     router = APIRouter(dependencies=[auth_dep] if auth_dep else [])
 
     # ---------------------------------------------- Read Only Routes ------------------------------------------------
+    @router.get("/get/{id}", status_code=200, summary=f"Get Document from {name} by ID")
+    def get_doc(id: str):
+        try:
+            object_id = parse_objectid(id)
+
+            doc = Model.find_one({"_id": object_id})
+            if not doc:
+                raise HTTPException(status_code=404, detail="Document not found")
+
+            return doc.to_dict(output_json=True)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=format_validation_error(e, debug))
+
+    @router.get("/distinct/{field}", summary=f"Get Distinct Values from {name}", tags=[name])
+    def distinct_field(field: str):
+        try:
+            values = Model.distinct(field)
+            return {"field": field, "values": values}
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=format_validation_error(e, debug))
+
     @router.post("/query", status_code=200, summary=f"Query Documents in {name}",)
     def query_docs(
             params: QueryRequest = Body(default=None),
@@ -175,6 +203,8 @@ def add_api_routes(app, name: str, Model, auth_func=None, debug=False, read_only
             "results": [doc.to_dict(output_json=True) if doc else None for doc in docs]
         }
 
+
+
     # ---------------------------------------------- Destructive Routes ------------------------------------------------
     if not read_only:
 
@@ -190,10 +220,7 @@ def add_api_routes(app, name: str, Model, auth_func=None, debug=False, read_only
         @router.put("/update/{id}", status_code=200, summary=f"Update Document in {name} by ID")
         def update_doc(id: str, payload: dict = Body(...)):
             try:
-                try:
-                    object_id = ObjectId(id)
-                except InvalidId:
-                    raise HTTPException(status_code=400, detail="Invalid document ID format")
+                object_id = parse_objectid(id)
 
                 if not any(key.startswith("$") for key in payload):
                     payload = {"$set": payload}
@@ -207,13 +234,22 @@ def add_api_routes(app, name: str, Model, auth_func=None, debug=False, read_only
             except Exception as e:
                 raise HTTPException(status_code=400, detail=format_validation_error(e, debug))
 
+        @router.put("/replace/{id}", status_code=200, summary=f"Replace Document in {name} by ID")
+        def replace_doc(id: str, payload: dict = Body(...)):
+            try:
+                object_id = parse_objectid(id)
+                payload["_id"] = object_id  # ensure _id is preserved
+                result = Model.replace_one({"_id": object_id}, payload)
+                if result.modified_count == 0:
+                    raise HTTPException(status_code=404, detail="Document not found or not replaced")
+                return {"replaced_id": id}
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=format_validation_error(e, debug))
+
         @router.delete("/delete/{id}", status_code=200, summary=f"Delete Document from {name} by ID")
         def delete_doc(id: str):
             try:
-                try:
-                    object_id = ObjectId(id)
-                except InvalidId:
-                    raise HTTPException(status_code=400, detail="Invalid document ID format")
+                object_id = parse_objectid(id)
 
                 deleted = Model.delete_one({"_id": object_id})
                 if deleted.deleted_count == 0:
@@ -223,6 +259,7 @@ def add_api_routes(app, name: str, Model, auth_func=None, debug=False, read_only
 
             except Exception as e:
                 raise HTTPException(status_code=400, detail=format_validation_error(e, debug))
+
 
     app.include_router(router, prefix=f"/{name}", tags=[name])
 
