@@ -15,19 +15,10 @@ from datetime import datetime
 from mso.base_model import MongoModel
 from mso.schema_loader import load_schema
 from mso.mongo_helpers import MongoHelpersMixin
+from mso.read_only_model import create_readonly_model
 from typing import Optional, Any
-from decimal import Decimal
-from bson import ObjectId
+from mso import utils
 
-def normalize_bson_type(bson_type):
-    if isinstance(bson_type, list):
-        for t in bson_type:
-            if t != 'null':
-                return t
-    return bson_type
-
-def normalize_class_name(name):
-    return name.replace(' ', '_').replace('-', '_')
 
 def generate_nested_class(name, schema, class_map):
     class_attrs = {
@@ -37,7 +28,7 @@ def generate_nested_class(name, schema, class_map):
 
     properties = schema.get('properties', {})
     for prop, details in properties.items():
-        bson_type = normalize_bson_type(details.get('bsonType', ''))
+        bson_type = utils.normalize_bson_type(details.get('bsonType', ''))
 
         if bson_type == 'object':
             nested_class = generate_nested_class(f"{name}_{prop}", details, class_map)
@@ -60,7 +51,7 @@ def generate_nested_class(name, schema, class_map):
 
             item_def = details.get('items', {})
 
-            item_type = normalize_bson_type(item_def.get('bsonType', ''))
+            item_type = utils.normalize_bson_type(item_def.get('bsonType', ''))
 
             if item_type == 'object':
                 nested_class = generate_nested_class(f"{name}_{prop}_item", item_def, class_map)
@@ -83,77 +74,6 @@ def generate_nested_class(name, schema, class_map):
     class_map[name] = new_class
     return new_class
 
-def create_readonly_model(collection_name, db):
-    class ReadOnlyDocument:
-        def __init__(self, data):
-            self._data = data
-
-        def __getattr__(self, item):
-            return self._data.get(item)
-
-        def __getitem__(self, item):
-            return self._data[item]
-
-        def __repr__(self):
-            return repr(self._data)
-
-        def to_dict(self, output_json=False):
-            model_dict = self._data.copy()
-            if output_json:
-                # Convert ObjectId and datetime to string
-                for key, value in model_dict.items():
-                    if isinstance(value, ObjectId):
-                        model_dict[key] = str(value)
-                    elif isinstance(value, datetime):
-                        model_dict[key] = value.isoformat()
-                    elif isinstance(value, Decimal):
-                        model_dict[key] = float(value)
-            return model_dict
-
-        def save(self):
-            raise TypeError(f"Cannot save document from read-only view '{collection_name}'.")
-
-        def delete(self):
-            raise TypeError(f"Cannot delete document from read-only view '{collection_name}'.")
-
-    class ReadOnlyModel:
-        __collection__ = collection_name
-        __db__ = db
-        _collection = db[collection_name]
-        __is_view__ = True
-
-        @classmethod
-        def find(cls, *args, **kwargs):
-            for doc in cls._collection.find(*args, **kwargs):
-                yield ReadOnlyDocument(doc)
-
-        @classmethod
-        def find_one(cls, *args, **kwargs):
-            doc = cls._collection.find_one(*args, **kwargs)
-            return ReadOnlyDocument(doc) if doc else None
-
-        @classmethod
-        def find_many(cls, *args, **kwargs):
-            return [ReadOnlyDocument(doc) for doc in cls._collection.find(*args, **kwargs)]
-
-        @classmethod
-        def aggregate(cls, *args, **kwargs):
-            return cls._collection.aggregate(*args, **kwargs)
-
-        @classmethod
-        def count_documents(cls, *args, **kwargs):
-            return cls._collection.count_documents(*args, **kwargs)
-
-        @classmethod
-        def get(cls, _id):
-            return cls.find_one({"_id": _id})
-
-        def __init__(self, *args, **kwargs):
-            raise TypeError(f"'{collection_name}' is a view and cannot be instantiated.")
-
-    ReadOnlyModel.__name__ = normalize_class_name(collection_name)
-    return ReadOnlyModel
-
 
 def get_model(db, collection_name):
     # Fetch collection info to detect if it's a view
@@ -169,12 +89,12 @@ def get_model(db, collection_name):
     class_map = {}
 
     model_class = generate_nested_class(
-        name=normalize_class_name(collection_name),
+        name=utils.normalize_class_name(collection_name),
         schema=schema,
         class_map=class_map
     )
 
-    model_name = normalize_class_name(collection_name)
+    model_name = utils.normalize_class_name(collection_name)
 
     FinalModel = type(model_name, (model_class, MongoHelpersMixin), {
         "__collection__": collection_name,
