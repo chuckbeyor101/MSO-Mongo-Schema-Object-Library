@@ -330,7 +330,7 @@ person.save()
 # 🧪 REST API with Swagger
 MSO can automatically generate a REST API for your models, complete with Swagger documentation. This allows you to easily expose your MongoDB collections as RESTful endpoints.
 ```python
-from mso import api
+from mso.api import start_api
 from pymongo import MongoClient
 from mso.generator import get_model
 
