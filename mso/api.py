@@ -26,6 +26,8 @@ import re
 from datetime import datetime
 from typing import Any, Union, Mapping
 from dateutil.parser import parse as parse_datetime
+from bson import ObjectId
+from bson.errors import InvalidId
 
 class QueryRequest(BaseModel):
     filter: Optional[Dict[str, Any]] = Field(
@@ -175,7 +177,52 @@ def add_api_routes(app, name: str, Model, auth_func=None, debug=False, read_only
 
     # ---------------------------------------------- Destructive Routes ------------------------------------------------
     if not read_only:
-        pass
+
+        @router.post("/insert", status_code=201, summary=f"Insert Document into {name}")
+        def insert_doc(payload: dict = Body(...)):
+            try:
+                doc = Model.from_dict(payload)
+                doc.save()
+                return {"inserted_id": str(doc._id)}
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=format_validation_error(e, debug))
+
+        @router.put("/update/{id}", status_code=200, summary=f"Update Document in {name} by ID")
+        def update_doc(id: str, payload: dict = Body(...)):
+            try:
+                try:
+                    object_id = ObjectId(id)
+                except InvalidId:
+                    raise HTTPException(status_code=400, detail="Invalid document ID format")
+
+                if not any(key.startswith("$") for key in payload):
+                    payload = {"$set": payload}
+
+                result = Model.update_one({"_id": object_id}, payload)
+
+                if result.modified_count == 0:
+                    raise HTTPException(status_code=404, detail="Document not found or no changes made")
+
+                return {"updated_id": id}
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=format_validation_error(e, debug))
+
+        @router.delete("/delete/{id}", status_code=200, summary=f"Delete Document from {name} by ID")
+        def delete_doc(id: str):
+            try:
+                try:
+                    object_id = ObjectId(id)
+                except InvalidId:
+                    raise HTTPException(status_code=400, detail="Invalid document ID format")
+
+                deleted = Model.delete_one({"_id": object_id})
+                if deleted.deleted_count == 0:
+                    raise HTTPException(status_code=404, detail="Document not found")
+
+                return {"deleted_id": id}
+
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=format_validation_error(e, debug))
 
     app.include_router(router, prefix=f"/{name}", tags=[name])
 
