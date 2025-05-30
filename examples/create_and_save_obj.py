@@ -27,6 +27,7 @@ db = client[MONGO_DB]
 People = get_model(db, "people")
 
 new_person = People(name="Tony Pajama", age=34)
+pass
 new_person.health.primary_physician.name = "Dr. Strange"
 
 # Save to MongoDB
@@ -38,7 +39,7 @@ print(new_person)
 new_person.health.primary_physician.contact.phone = "123-456-7890"
 
 # add an address using add()
-new_person.addresses.add(type="work",street="789 Oak St",city="Panama",state="NJ",zip="14862")
+new_person.addresses.add(type="Other",street="789 Oak St",city="Panama",state="NJ",zip="14862")
 
 # Add a new condition to the person's medical history
 condition = new_person.health.medical_history.conditions.add(
@@ -54,7 +55,7 @@ condition.medications.add(
 )
 
 # add an address using append
-address1 = People.addresses_item(type="home",city="Panama",state="NJ",zip="14862")
+address1 = People.addresses_item(type="Home",street="112 Rampart Rd",city="Panama",state="NJ",zip="14862")
 new_person.addresses.append(address1)
 
 # Modify medication by index reference

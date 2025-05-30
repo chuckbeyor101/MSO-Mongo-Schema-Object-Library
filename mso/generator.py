@@ -21,6 +21,21 @@ from mso import utils
 
 
 def generate_nested_class(name, schema, class_map):
+    """
+        Recursively generates a nested Python class based on a MongoDB $jsonSchema object definition.
+
+        Each generated class inherits from `MongoModel` and is stored in the provided `class_map`
+        using the generated class name as the key. The result is a full class hierarchy that allows
+        attribute-style access to deeply nested MongoDB documents.
+
+        Args:
+            name (str): The name to use for the generated class (typically based on the field path).
+            schema (dict): The MongoDB $jsonSchema definition for the object.
+            class_map (dict): A dictionary to collect all generated classes by name.
+
+        Returns:
+            Type[MongoModel]: The dynamically generated class corresponding to the input schema.
+        """
     class_attrs = {
         '_schema': schema
     }
@@ -28,8 +43,10 @@ def generate_nested_class(name, schema, class_map):
 
     properties = schema.get('properties', {})
     for prop, details in properties.items():
-        bson_type = utils.normalize_bson_type(details.get('bsonType', ''))
+        # Determine the first non-null bsonType in the bsonType list for this field
+        bson_type = utils.get_primary_bson_type(details.get('bsonType', ''))
 
+        # For nested objects, generate a new class and create a property that returns an instance of that class
         if bson_type == 'object':
             nested_class = generate_nested_class(f"{name}_{prop}", details, class_map)
 
@@ -47,17 +64,19 @@ def generate_nested_class(name, schema, class_map):
             class_attrs[f"__class_for__{prop}"] = nested_class
             annotations[prop] = Optional[nested_class]
 
+        # For arrays, we need to handle the type for the items in the array
         elif bson_type == 'array':
 
             item_def = details.get('items', {})
 
-            item_type = utils.normalize_bson_type(item_def.get('bsonType', ''))
+            # Determine the first non-null bsonType in the bsonType list for this field
+            item_type = utils.get_primary_bson_type(item_def.get('bsonType', ''))
 
+            # If the item type is an object, generate a nested class for it
             if item_type == 'object':
                 nested_class = generate_nested_class(f"{name}_{prop}_item", item_def, class_map)
 
                 # Attach item class to parent class so it can be used for construction
-
                 class_attrs[f"{prop}_item"] = nested_class
 
             annotations[prop] = Optional[list]
@@ -76,6 +95,23 @@ def generate_nested_class(name, schema, class_map):
 
 
 def get_model(db, collection_name):
+    """
+    Dynamically generates a Python class model for a MongoDB collection using its $jsonSchema validator.
+
+    This function connects to the specified MongoDB collection, detects whether it is a view or a regular
+    collection, and constructs a dynamic Python class based on its schema. For views, a read-only model
+    is returned. For regular collections with schema validation, the schema is parsed and a full class
+    hierarchy is generated using nested Python classes that mirror the schema structure.
+
+    Args:
+        db (pymongo.database.Database): The MongoDB database object.
+        collection_name (str): The name of the collection to model.
+
+    Returns:
+        Type[MongoModel]: A dynamically generated class representing the MongoDB collection,
+                          including any nested subdocuments.
+    """
+
     # Fetch collection info to detect if it's a view
     info = db.command("listCollections", filter={"name": collection_name})
     collection_info = info["cursor"]["firstBatch"][0]
