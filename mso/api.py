@@ -360,6 +360,7 @@ def start_api(
     pretty_tags: bool = True,
     limit_default=20,
     limit_max=1000,
+    extra_routes: Union[APIRouter, List[APIRouter]] = None,
     **uvicorn_kwargs
 ):
     """
@@ -388,6 +389,7 @@ def start_api(
             pretty_tags (bool): Whether to use prettified tags in the OpenAPI docs.
             limit_default (int): Default page size for paginated routes.
             limit_max (int): Maximum page size for paginated routes.
+            extra_routes (APIRouter or list of APIRouter, optional): Additional FastAPI routers to include.
             **uvicorn_kwargs: Additional keyword arguments passed to `uvicorn.run()`.
 
         Behavior:
@@ -449,5 +451,13 @@ def start_api(
         else:
             print(f"Registering routes for collection: {name}") if debug else None
             add_api_routes(app, name, Model, auth_func=auth_func, debug=debug, read_only=False, limit_default=limit_default, limit_max=limit_max, pretty_tags=pretty_tags)
+
+    # Register any additional routes provided
+    if extra_routes:
+        if isinstance(extra_routes, list):
+            for router in extra_routes:
+                app.include_router(router)
+        else:
+            app.include_router(extra_routes)
 
     uvicorn.run(app, host=host, port=port, **uvicorn_kwargs)
