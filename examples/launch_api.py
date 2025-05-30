@@ -11,19 +11,11 @@
 #                                                                                                                      #
 #  Gitlab: https://github.com/chuckbeyor101/MSO-Mongo-Schema-Object-Library                                            #
 # ######################################################################################################################
-from operator import truediv
 
 from pymongo import MongoClient
 from mso.api import start_api
-from fastapi import HTTPException
+from fastapi import APIRouter
 import os
-
-
-async def authenticate(request):
-    authorized = True
-
-    if not authorized:
-        raise HTTPException(status_code=401, detail="Unauthorized")
 
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 MONGO_DB = os.getenv("MONGO_DB", "mydb")
@@ -31,4 +23,12 @@ MONGO_DB = os.getenv("MONGO_DB", "mydb")
 client = MongoClient(MONGO_URI)
 db = client[MONGO_DB]
 
-start_api(db, debug=False, auth_func=authenticate)
+custom_router = APIRouter()
+
+
+@custom_router.get("/hello", tags=["Custom Routes"])
+def say_hello():
+    return {"message": "Hello from a custom route!"}
+
+
+start_api(db, extra_routes=custom_router)
