@@ -353,12 +353,18 @@ You can extend the auto-generated API with your own custom routes using the extr
 from fastapi import APIRouter
 from mso.api import start_api
 
+# Connect to MongoDB
+client = MongoClient("mongodb://localhost:27017")
+db = client["mydb"]
+
+# Define your custom routes
 custom_router = APIRouter()
 
 @custom_router.get("/people/stats", tags=["People"])
 def get_people_stats():
     return {"message": "Custom stats for the People collection"}
 
+# Start the API with custom routes
 start_api(
     db=db,
     collections=["*"],
