@@ -16,7 +16,7 @@ from datetime import datetime
 from bson import ObjectId
 from decimal import Decimal
 from typing import Any, List, Dict
-from mso import config
+from mso import config, utils
 
 
 # ----------------------------------------------------------------------------------
@@ -285,9 +285,9 @@ class MongoModel:
         # MULTI-TYPE SUPPORT
         # ----------------------------
         if isinstance(bson_type, list):
-            expected_types = [config.BSON_TYPE_MAP.get(t, object) for t in bson_type if t in config.BSON_TYPE_MAP]
+            expected_types = utils.map_bson_to_python_type(bson_type)
         else:
-            expected_types = [config.BSON_TYPE_MAP.get(bson_type, object)]
+            expected_types = utils.map_bson_to_python_type(bson_type)
 
         # ----------------------------
         # OBJECT VALIDATION
@@ -322,7 +322,7 @@ class MongoModel:
                     continue
 
                 # SCALAR VALIDATION
-                expected_item_type = config.BSON_TYPE_MAP.get(item_type, object)
+                expected_item_type = utils.map_bson_to_python_type(bson_type)
                 if not isinstance(item, expected_item_type):
                     # Attempt coercion since initial type check failed
                     value = self.coerce_type(item, [expected_item_type])
@@ -331,11 +331,12 @@ class MongoModel:
         # ----------------------------
         # BASIC SCALAR TYPE CHECK
         # ----------------------------
+        if not isinstance(expected_types, list):
+            expected_types = [expected_types]
+
         if not any(isinstance(value, t) for t in expected_types):
             # Attempt coercion since initial type check failed
             value = self.coerce_type(value, expected_types)
-
-
 
     # ----------------------------------------------------------------------------------
     # Initialize the model
@@ -351,6 +352,7 @@ class MongoModel:
         for key, value in kwargs.items():
             setattr(self, key, value)
 
+    @classmethod
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
         for attr_name in dir(cls):
