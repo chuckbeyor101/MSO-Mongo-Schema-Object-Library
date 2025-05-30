@@ -1,0 +1,145 @@
+{
+  "$jsonSchema": {
+    "bsonType": "object",
+    "properties": {
+      "name": {
+        "bsonType": "string"
+      },
+      "age": {
+        "bsonType": "int"
+      },
+      "email": {
+        "bsonType": "string"
+      },
+      "gender": {
+        "enum": [
+          "Male",
+          "Female",
+          "Other"
+        ]
+      },
+      "addresses": {
+        "bsonType": "array",
+        "items": {
+          "bsonType": "object",
+          "required": [
+            "type",
+            "street",
+            "city",
+            "state",
+            "zip"
+          ],
+          "properties": {
+            "type": {
+              "enum": [
+                "Home",
+                "Business",
+                "Other"
+              ]
+            },
+            "street": {
+              "bsonType": "string"
+            },
+            "city": {
+              "bsonType": "string"
+            },
+            "state": {
+              "bsonType": "string"
+            },
+            "zip": {
+              "bsonType": "string"
+            }
+          }
+        }
+      },
+      "health": {
+        "bsonType": "object",
+        "properties": {
+          "medical_history": {
+            "bsonType": "object",
+            "properties": {
+              "conditions": {
+                "bsonType": "array",
+                "items": {
+                  "bsonType": "object",
+                  "required": [
+                    "name"
+                  ],
+                  "properties": {
+                    "name": {
+                      "bsonType": "string"
+                    },
+                    "diagnosed": {
+                      "bsonType": "string"
+                    },
+                    "medications": {
+                      "bsonType": "array",
+                      "items": {
+                        "bsonType": "object",
+                        "required": [
+                          "name",
+                          "dose",
+                          "frequency"
+                        ],
+                        "properties": {
+                          "name": {
+                            "bsonType": "string"
+                          },
+                          "dose": {
+                            "bsonType": "string"
+                          },
+                          "frequency": {
+                            "bsonType": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "allergies": {
+                "bsonType": "array",
+                "items": {
+                  "bsonType": "string"
+                }
+              }
+            }
+          },
+          "primary_physician": {
+            "bsonType": "object",
+            "properties": {
+              "name": {
+                "bsonType": "string"
+              },
+              "contact": {
+                "bsonType": "object",
+                "properties": {
+                  "phone": {
+                    "bsonType": "string"
+                  },
+                  "address": {
+                    "bsonType": "object",
+                    "properties": {
+                      "street": {
+                        "bsonType": "string"
+                      },
+                      "city": {
+                        "bsonType": "string"
+                      },
+                      "state": {
+                        "bsonType": "string"
+                      },
+                      "zip": {
+                        "bsonType": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
