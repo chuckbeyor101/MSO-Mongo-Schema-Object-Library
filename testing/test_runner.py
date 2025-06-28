@@ -11,6 +11,7 @@
 #                                                                                                                      #
 #  Gitlab: https://github.com/chuckbeyor101/MSO-Mongo-Schema-Object-Library                                            #
 # ######################################################################################################################
+import sys
 
 from testing.database import initialize_test_db
 from mso.generator import get_model
@@ -18,6 +19,7 @@ from mso.generator import get_model
 from mso.base_model import MongoModel, pre_save, post_save
 import pytest
 
+test_paths = []
 db = initialize_test_db.main()
 
 
@@ -51,6 +53,7 @@ def test_print_all_enums():
     People = get_model(db, "people")
     print(People.enums())
 
+
 # ####################################################################################################################################
 # ------------------------------------------- Test Cases for Developer Utilities ---------------------------------------------------
 # ####################################################################################################################################
@@ -71,8 +74,6 @@ def test_life_cycle_hooks():
     person.save()  # This should trigger the post_save hook and print "Saved: Tony Pajama"
 
     assert test_state["post_save_called"], "Post-save hook was not called"
-
-
 
 
 # ####################################################################################################################################
@@ -195,6 +196,7 @@ def test_bulk_save():
     found_people = People.find_many({"age": {"$gte": 30}})
 
     assert len(found_people) >= 2, "Bulk save did not save all persons"
+
 
 def test_field_validation():
     People = get_model(db, "people")
@@ -366,6 +368,7 @@ def test_get_one():
     assert found_person is not None, "Failed to get one person from database"
     assert found_person.name == "Person Get One", "Found person does not match expected name"
 
+
 # ####################################################################################################################################
 # ------------------------------------------- Test Cases for Model Data Inspection ---------------------------------------------------
 # ####################################################################################################################################
@@ -381,3 +384,12 @@ def test_to_dict():
 
     assert isinstance(person_dict, dict), "to_dict() did not return a dictionary"
     assert isinstance(person_json, dict), "to_dict(output_json=True) did not return a JSON string"
+
+
+# ####################################################################################################################################
+# ------------------------------------- Main Execution Block If File Is Run Directly -------------------------------------------------
+# ####################################################################################################################################
+if __name__ == "__main__":
+    args = test_paths
+    exit_code = pytest.main(args)
+    sys.exit(exit_code)
