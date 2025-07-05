@@ -83,5 +83,6 @@ def delete_previous_db_data(client):
         client.drop_database(db_name)
         print(f"Deleted database: {db_name}")
 
+
 if __name__ == "__main__":
     main()
